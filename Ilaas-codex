@@ -1,0 +1,137 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LITELLM_CONFIG="${LITELLM_CONFIG:-$HOME/.config/litellm/ilaas-mistral.yaml}"
+LITELLM_BIN="${LITELLM_BIN:-$HOME/.venvs/litellm/bin/litellm}"
+LITELLM_HOST="${LITELLM_HOST:-127.0.0.1}"
+LITELLM_PORT="${LITELLM_PORT:-4000}"
+RESPONSES_HOST="${RESPONSES_HOST:-127.0.0.1}"
+RESPONSES_PORT="${RESPONSES_PORT:-4001}"
+CODEX_HOME="${CODEX_HOME:-$HOME/.codex-ilaas}"
+OPENAI_API_KEY="${OPENAI_API_KEY:-sk-local-dummy}"
+LOG_DIR="${ILAAS_CODEX_LOG_DIR:-${MISTRAL_CODEX_LOG_DIR:-$HOME/.cache/Ilaas-codex}}"
+
+started_pids=()
+
+usage() {
+  cat <<'EOF'
+Usage: Ilaas-codex [codex args...]
+
+Starts LiteLLM on :4000 if needed, starts the Codex Responses proxy on :4001
+if needed, then runs Codex with CODEX_HOME=~/.codex-ilaas.
+
+Examples:
+  Ilaas-codex
+  Ilaas-codex exec --skip-git-repo-check "Réponds exactement: OK"
+
+Environment overrides:
+  LITELLM_CONFIG, LITELLM_BIN, LITELLM_HOST, LITELLM_PORT
+  RESPONSES_HOST, RESPONSES_PORT, CODEX_HOME, OPENAI_API_KEY
+  ILAAS_CODEX_LOG_DIR, ILAAS_CODEX_KEEP_SERVERS=1
+  MISTRAL_CODEX_LOG_DIR, MISTRAL_CODEX_KEEP_SERVERS=1 (legacy)
+EOF
+}
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  usage
+  exit 0
+fi
+
+port_open() {
+  local host="$1"
+  local port="$2"
+  timeout 1 bash -c ":</dev/tcp/${host}/${port}" >/dev/null 2>&1
+}
+
+wait_for_port() {
+  local name="$1"
+  local host="$2"
+  local port="$3"
+  local attempt
+
+  for attempt in {1..80}; do
+    if port_open "$host" "$port"; then
+      return 0
+    fi
+    sleep 0.25
+  done
+
+  echo "Ilaas-codex: timed out waiting for ${name} on ${host}:${port}" >&2
+  return 1
+}
+
+start_litellm() {
+  if port_open "$LITELLM_HOST" "$LITELLM_PORT"; then
+    echo "Ilaas-codex: LiteLLM already listening on ${LITELLM_HOST}:${LITELLM_PORT}" >&2
+    return
+  fi
+
+  if [[ ! -x "$LITELLM_BIN" ]]; then
+    if command -v litellm >/dev/null 2>&1; then
+      LITELLM_BIN="$(command -v litellm)"
+    else
+      echo "Ilaas-codex: litellm not found. Set LITELLM_BIN or install LiteLLM." >&2
+      exit 1
+    fi
+  fi
+
+  if [[ ! -f "$LITELLM_CONFIG" ]]; then
+    echo "Ilaas-codex: LiteLLM config not found: $LITELLM_CONFIG" >&2
+    exit 1
+  fi
+
+  mkdir -p "$LOG_DIR"
+  echo "Ilaas-codex: starting LiteLLM on ${LITELLM_HOST}:${LITELLM_PORT}" >&2
+  "$LITELLM_BIN" \
+    --config "$LITELLM_CONFIG" \
+    --host "$LITELLM_HOST" \
+    --port "$LITELLM_PORT" \
+    >"$LOG_DIR/litellm.log" 2>&1 &
+  started_pids+=("$!")
+  wait_for_port "LiteLLM" "$LITELLM_HOST" "$LITELLM_PORT"
+}
+
+start_responses_proxy() {
+  if port_open "$RESPONSES_HOST" "$RESPONSES_PORT"; then
+    echo "Ilaas-codex: Responses proxy already listening on ${RESPONSES_HOST}:${RESPONSES_PORT}" >&2
+    return
+  fi
+
+  mkdir -p "$LOG_DIR"
+  echo "Ilaas-codex: starting Responses proxy on ${RESPONSES_HOST}:${RESPONSES_PORT}" >&2
+  python3 "$ROOT_DIR/codex_ilaas_responses_proxy.py" \
+    --host "$RESPONSES_HOST" \
+    --port "$RESPONSES_PORT" \
+    --upstream "http://${LITELLM_HOST}:${LITELLM_PORT}/v1" \
+    >"$LOG_DIR/responses-proxy.log" 2>&1 &
+  started_pids+=("$!")
+  wait_for_port "Responses proxy" "$RESPONSES_HOST" "$RESPONSES_PORT"
+}
+
+cleanup() {
+  if [[ "${ILAAS_CODEX_KEEP_SERVERS:-${MISTRAL_CODEX_KEEP_SERVERS:-0}}" == "1" ]]; then
+    return
+  fi
+
+  local pid
+  for pid in "${started_pids[@]}"; do
+    if kill -0 "$pid" >/dev/null 2>&1; then
+      kill "$pid" >/dev/null 2>&1 || true
+    fi
+  done
+}
+
+trap cleanup EXIT INT TERM
+
+start_litellm
+start_responses_proxy
+
+export CODEX_HOME
+export OPENAI_API_KEY
+
+set +e
+codex "$@"
+status=$?
+set -e
+exit "$status"

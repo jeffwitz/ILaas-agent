@@ -1,0 +1,23 @@
+__pycache__/
+*.py[cod]
+*.log
+.env
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+dist/
+build/
+*.egg-info/
+
+# Local secrets and generated configs
+config.local.*
+*api_key*
+*apikey*
+*.local.json
+*.local.toml
+*.local.yaml
+
+# Runtime artifacts
+.ilaas-run/
+.ilaas-cache/
