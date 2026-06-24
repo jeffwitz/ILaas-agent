@@ -201,6 +201,7 @@ Read the details in [docs/interfaces.md](docs/interfaces.md).
 Start here:
 
 ```text
+docs/index.md
 docs/interfaces.md
 docs/dependencies.md
 docs/codex.md
@@ -213,11 +214,14 @@ docs/windows.md
 
 Maintainer notes are in [CODEX.md](CODEX.md). The implementation roadmap is in [CdC.md](CdC.md).
 
+The online documentation is configured for Read the Docs with `.readthedocs.yaml`, `docs/conf.py`, and the Read the Docs Sphinx theme. To publish it, import this GitHub repository in Read the Docs; the build uses `docs/requirements.txt`.
+
 ## Development Checks
 
 ```bash
 python3 -m py_compile install.py ilaas_agents/*.py proxies/*.py scripts/clone_isolated_check.py
 python3 -m unittest discover -s tests
 bash -n Ilaas-codex Ilaas-claude Ilaas-opencode Ilaas-doctor Ilaas-servers install.sh
+python3 -m sphinx -b html -W --keep-going docs docs/_build/html
 python3 scripts/clone_isolated_check.py
 ```

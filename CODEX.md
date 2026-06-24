@@ -210,6 +210,7 @@ Run before commit:
 ```bash
 python3 -m py_compile install.py ilaas_agents/*.py proxies/*.py
 bash -n Ilaas-codex Ilaas-claude Ilaas-opencode Ilaas-doctor Ilaas-servers install.sh
+python3 -m sphinx -b html -W --keep-going docs docs/_build/html
 Ilaas-doctor
 Ilaas-opencode run --model qwen-3.6-35b-instruct "Reply exactly: OK"
 python -m unittest discover -s tests

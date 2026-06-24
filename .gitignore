@@ -21,6 +21,7 @@ config.local.*
 # Runtime artifacts
 .ilaas-run/
 .ilaas-cache/
+docs/_build/
 clef_api.txt
 api_key.txt
 ilaas_api_key.txt
