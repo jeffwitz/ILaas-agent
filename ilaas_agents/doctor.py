@@ -3,6 +3,8 @@ from __future__ import annotations
 import shutil
 import socket
 import subprocess
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 from . import paths
@@ -30,6 +32,18 @@ def exists(label: str, path: Path) -> tuple[str, bool, str]:
     return (label, path.exists(), str(path))
 
 
+def http_json_ok(label: str, url: str) -> tuple[str, bool, str]:
+    try:
+        request = urllib.request.Request(url, headers={"authorization": "Bearer sk-local-dummy"})
+        with urllib.request.urlopen(request, timeout=5) as response:
+            response.read()
+            return (label, 200 <= response.status < 300, f"{response.status} {url}")
+    except urllib.error.HTTPError as error:
+        return (label, False, f"{error.code} {url}")
+    except Exception as error:
+        return (label, False, f"{url} ({error})")
+
+
 def run() -> int:
     checks: list[tuple[str, bool, str]] = [
         ("LiteLLM config", paths.litellm_config_path().exists(), str(paths.litellm_config_path())),
@@ -44,10 +58,17 @@ def run() -> int:
         version = command_version(command)
         checks.append((command, version is not None, version or "not found"))
 
+    if port_open("127.0.0.1", 4000):
+        checks.append(http_json_ok("LiteLLM /v1/models", "http://127.0.0.1:4000/v1/models"))
+    if port_open("127.0.0.1", 4001):
+        checks.append(http_json_ok("Codex proxy /health", "http://127.0.0.1:4001/health"))
+    if port_open("127.0.0.1", 4002):
+        checks.append(http_json_ok("Claude proxy /health", "http://127.0.0.1:4002/health"))
+
     failed = 0
     for label, ok, detail in checks:
         status = "OK" if ok else "WARN"
-        if not ok and label in {"LiteLLM config", "Codex config", "Model catalog", "Wrapper dir"}:
+        if not ok and label in {"LiteLLM config", "Codex config", "Model catalog", "Wrapper dir", "LiteLLM /v1/models"}:
             failed += 1
         print(f"[{status}] {label}: {detail}")
     return 0 if failed == 0 else 1

@@ -6,7 +6,7 @@ from pathlib import Path
 from . import paths
 
 
-POSIX_NAMES = ["Ilaas-codex", "Ilaas-claude", "Ilaas-opencode"]
+POSIX_NAMES = ["Ilaas-codex", "Ilaas-claude", "Ilaas-opencode", "Ilaas-doctor", "Ilaas-servers"]
 
 
 def install_wrappers(wrapper_dir: Path | None = None) -> list[Path]:
