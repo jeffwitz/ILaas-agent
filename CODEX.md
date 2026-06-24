@@ -75,6 +75,8 @@ python -m ilaas_agents.cli deps status
 
 `smoke` intentionally consumes tokens; `doctor` does not run prompt-based checks by default.
 
+Codex sandbox mode is configurable with `--codex-sandbox-mode` or `ILAAS_CODEX_SANDBOX_MODE`. The default remains `danger-full-access` to avoid known Linux bubblewrap namespace failures.
+
 Model listing:
 
 ```bash
@@ -185,6 +187,7 @@ Partial:
 
 - Multi-OS support: paths and wrappers are designed for Windows/macOS, but only Linux is validated.
 - Doctor: checks files, commands, ports, LiteLLM `/v1/models`, and proxy `/health`; it does not run token-consuming prompts by default.
+- Runtime wrappers: if a default port is already open, they verify `/v1/models` or `/health` before reusing it.
 - Installer: `--force` is accepted for idempotent reinstall workflows, but no destructive reset behavior is implemented.
 
 Not done yet:

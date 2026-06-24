@@ -5,6 +5,8 @@ import os
 import shutil
 import subprocess
 import sys
+import time
+import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -52,8 +54,38 @@ def litellm_bin() -> str:
     raise SystemExit("litellm not found. Run python install.py or set LITELLM_BIN.")
 
 
+def http_json_ok(url: str, timeout: float = 2.0) -> bool:
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as response:
+            if response.status >= 400:
+                return False
+            json.loads(response.read().decode("utf-8"))
+            return True
+    except Exception:
+        return False
+
+
+def wait_for_http_json(name: str, url: str, attempts: int = 80) -> None:
+    for _ in range(attempts):
+        if http_json_ok(url):
+            return
+        time.sleep(0.25)
+    raise SystemExit(f"timed out waiting for {name} at {url}")
+
+
+def require_existing_http_service(name: str, url: str, port_hint: str) -> None:
+    if http_json_ok(url):
+        return
+    raise SystemExit(
+        f"{name} port is open but the expected ILaaS service did not answer at {url}. "
+        f"Stop the conflicting service or use {port_hint} to choose another port."
+    )
+
+
 def ensure_litellm(manager: ProcessManager, cfg: RuntimeConfig, persistent: bool = False) -> None:
+    health_url = f"http://{cfg.litellm_host}:{cfg.litellm_port}/v1/models"
     if manager.port_open(cfg.litellm_host, cfg.litellm_port):
+        require_existing_http_service("LiteLLM", health_url, "LITELLM_PORT")
         print(f"ILaaS: LiteLLM already listening on {cfg.litellm_host}:{cfg.litellm_port}", file=sys.stderr)
         return
     config_path = Path(os.environ.get("LITELLM_CONFIG", paths.litellm_config_path()))
@@ -68,10 +100,13 @@ def ensure_litellm(manager: ProcessManager, cfg: RuntimeConfig, persistent: bool
         detach=persistent,
     )
     manager.wait_for_port("LiteLLM", cfg.litellm_host, cfg.litellm_port)
+    wait_for_http_json("LiteLLM", health_url)
 
 
 def ensure_codex_proxy(manager: ProcessManager, cfg: RuntimeConfig, persistent: bool = False) -> None:
+    health_url = f"http://{cfg.responses_host}:{cfg.responses_port}/health"
     if manager.port_open(cfg.responses_host, cfg.responses_port):
+        require_existing_http_service("Codex Responses proxy", health_url, "RESPONSES_PORT")
         print(f"ILaaS: Codex Responses proxy already listening on {cfg.responses_host}:{cfg.responses_port}", file=sys.stderr)
         return
     proxy = paths.repo_root() / "proxies" / "codex_ilaas_responses_proxy.py"
@@ -93,10 +128,13 @@ def ensure_codex_proxy(manager: ProcessManager, cfg: RuntimeConfig, persistent: 
         detach=persistent,
     )
     manager.wait_for_port("Codex Responses proxy", cfg.responses_host, cfg.responses_port)
+    wait_for_http_json("Codex Responses proxy", health_url)
 
 
 def ensure_claude_proxy(manager: ProcessManager, cfg: RuntimeConfig, persistent: bool = False) -> None:
+    health_url = f"http://{cfg.claude_host}:{cfg.claude_port}/health"
     if manager.port_open(cfg.claude_host, cfg.claude_port):
+        require_existing_http_service("Claude Messages proxy", health_url, "CLAUDE_ILAAS_PORT")
         print(f"ILaaS: Claude Messages proxy already listening on {cfg.claude_host}:{cfg.claude_port}", file=sys.stderr)
         return
     proxy = paths.repo_root() / "proxies" / "claude_ilaas_messages_proxy.py"
@@ -118,6 +156,7 @@ def ensure_claude_proxy(manager: ProcessManager, cfg: RuntimeConfig, persistent:
         detach=persistent,
     )
     manager.wait_for_port("Claude Messages proxy", cfg.claude_host, cfg.claude_port)
+    wait_for_http_json("Claude Messages proxy", health_url)
 
 
 def list_models(claude: bool = False) -> None:

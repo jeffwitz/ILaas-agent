@@ -10,6 +10,8 @@ Codex CLI -> http://127.0.0.1:4001/v1/responses
 
 The proxy is required because LiteLLM `/v1/responses` returned empty output and `tokens used 0` for real Codex requests, while `/v1/chat/completions` worked.
 
+The proxy is a minimal compatibility layer. It does not implement the complete OpenAI Responses API and does not provide native upstream token-by-token streaming.
+
 ## Usage
 
 ```bash
@@ -40,3 +42,20 @@ supports_websockets = false
 ```
 
 `supports_websockets = false` avoids Codex attempting WebSocket transport against LiteLLM.
+
+## Sandbox Mode
+
+The installer defaults to:
+
+```toml
+sandbox_mode = "danger-full-access"
+```
+
+This avoids Codex bubblewrap/AppArmor user namespace failures on affected Linux systems, but it disables Codex filesystem sandboxing.
+
+Choose a stricter mode during install if your machine supports it:
+
+```bash
+python3 install.py --codex-sandbox-mode workspace-write
+python3 install.py --codex-sandbox-mode read-only
+```

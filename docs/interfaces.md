@@ -46,6 +46,8 @@ wire_api = "responses"
 supports_websockets = false
 ```
 
+The Responses proxy is intentionally minimal. It translates the subset needed by the tested Codex workflows into Chat Completions; it is not a complete OpenAI Responses implementation.
+
 ## Claude Code
 
 Claude Code expects the Anthropic Messages API, not OpenAI Chat Completions. The project therefore runs a local Messages proxy:
@@ -64,6 +66,8 @@ claude-ilaas-<ilaas-slug>
 ```
 
 The wrapper accepts raw ILaaS slugs such as `qwen-3.6-35b-instruct` and rewrites them automatically.
+
+The Messages proxy is intentionally minimal. It supports the tested Claude Code flows, but it is not a complete Anthropic Messages implementation.
 
 ## OpenCode
 

@@ -50,6 +50,16 @@ Run the fastest practical smoke test:
 Ilaas-opencode run --model qwen-3.6-35b-instruct "Reply exactly: OK"
 ```
 
+## Important Security Note
+
+The generated Codex config defaults to `sandbox_mode = "danger-full-access"` because this avoids known Linux bubblewrap/AppArmor user namespace failures. This disables Codex filesystem sandboxing.
+
+Use a stricter mode when your system supports it:
+
+```bash
+python3 install.py --codex-sandbox-mode workspace-write
+```
+
 ## Run Each Agent
 
 Codex CLI:
@@ -117,6 +127,7 @@ python3 install.py --check-agent-deps --install-agent-deps
 python3 install.py --prefix ~/.local
 python3 install.py --force
 python3 install.py --skip-litellm-install
+python3 install.py --codex-sandbox-mode workspace-write
 ```
 
 The ILaaS API key is written only to the local LiteLLM config, outside the repository.
@@ -194,6 +205,8 @@ Short version:
 - Claude Code expects Anthropic `/v1/messages`, so this repo provides a local Messages proxy.
 - OpenCode can use an OpenAI-compatible provider directly, so it points to LiteLLM.
 
+The Codex and Claude Code proxies are minimal compatibility layers for the tested agent workflows. They are not complete OpenAI Responses or Anthropic Messages API implementations.
+
 Read the details in [docs/interfaces.md](docs/interfaces.md).
 
 ## Documentation
@@ -203,6 +216,7 @@ Start here:
 ```text
 docs/index.md
 docs/interfaces.md
+docs/compatibility.md
 docs/dependencies.md
 docs/codex.md
 docs/claude-code.md

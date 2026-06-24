@@ -27,6 +27,21 @@ class RunnersTest(unittest.TestCase):
         payload = json.loads(content)
         self.assertEqual(payload["provider"]["ilaas"]["models"]["qwen-3.6-35b-instruct"]["limit"]["context"], 1234)
 
+    def test_existing_codex_proxy_port_must_match_health_endpoint(self):
+        manager = mock.Mock()
+        manager.port_open.return_value = True
+        with mock.patch("ilaas_agents.runners.http_json_ok", return_value=False):
+            with self.assertRaises(SystemExit) as context:
+                runners.ensure_codex_proxy(manager, runners.RuntimeConfig())
+        self.assertIn("expected ILaaS service", str(context.exception))
+
+    def test_existing_codex_proxy_port_is_reused_when_health_matches(self):
+        manager = mock.Mock()
+        manager.port_open.return_value = True
+        with mock.patch("ilaas_agents.runners.http_json_ok", return_value=True):
+            runners.ensure_codex_proxy(manager, runners.RuntimeConfig())
+        manager.start.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

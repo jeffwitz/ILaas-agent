@@ -96,6 +96,7 @@ llama-3.3-70b
 :caption: User Guide
 
 interfaces
+compatibility
 dependencies
 models
 codex

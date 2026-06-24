@@ -27,6 +27,7 @@ class InstallTest(unittest.TestCase):
                 non_interactive=True,
                 prefix=str(prefix),
                 force=True,
+                codex_sandbox_mode="workspace-write",
                 check_agent_deps=False,
                 install_agent_deps=False,
                 install_agent=None,
@@ -40,6 +41,8 @@ class InstallTest(unittest.TestCase):
             self.assertTrue((root / "home" / ".codex-ilaas" / "model-catalogs" / "ilaas-mistral.json").exists())
             self.assertTrue((prefix / "bin" / "Ilaas-codex").exists())
             self.assertTrue((prefix / "bin" / "Ilaas-doctor").exists())
+            codex_config = (root / "home" / ".codex-ilaas" / "config.toml").read_text()
+            self.assertIn('sandbox_mode = "workspace-write"', codex_config)
 
 
 if __name__ == "__main__":

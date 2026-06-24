@@ -40,6 +40,8 @@ Ilaas-servers stop
 
 If a service was started outside this project, stop it manually.
 
+The wrappers verify the expected HTTP endpoint before reusing an open port. If another service is listening on `4000`, `4001`, or `4002`, the wrapper exits instead of silently using it. Use `LITELLM_PORT`, `RESPONSES_PORT`, or `CLAUDE_ILAAS_PORT` to choose alternate ports.
+
 ## Missing ILaaS key
 
 Set the key during install:
