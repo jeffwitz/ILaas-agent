@@ -40,6 +40,20 @@ Ilaas-claude -p --model qwen-3.6-35b-instruct "Réponds exactement: OK"
 Ilaas-opencode run --model qwen-3.6-35b-instruct "Réponds exactement: OK"
 ```
 
+## Shared CLI
+
+The wrappers call a shared Python CLI:
+
+```bash
+python -m ilaas_agents.cli doctor
+python -m ilaas_agents.cli refresh-models
+python -m ilaas_agents.cli servers status
+python -m ilaas_agents.cli servers start
+python -m ilaas_agents.cli servers stop
+```
+
+`servers start` launches LiteLLM plus the Codex and Claude compatibility proxies as persistent background services. The agent wrappers can also start only what they need for a single run.
+
 ## Model Refresh
 
 ```bash
@@ -74,6 +88,14 @@ They may answer simple chat prompts, but their tool-calling path is weak or brok
 
 ## Status
 
-The Linux prototype is validated locally. The Python installer is the start of the multi-OS cleanup. Windows native support is planned but should be considered experimental until tested. On Windows, WSL2 is the recommended path for now.
+The Linux path is validated locally with the Python runners:
+
+```text
+Codex CLI -> OK, Responses proxy, tokens consumed
+Claude Code -> OK with qwen-3.6-35b-instruct
+OpenCode -> OK with qwen-3.6-35b-instruct and Read tool
+```
+
+Windows native support is planned but should be considered experimental until tested. On Windows, WSL2 is the recommended path for now.
 
 See [CdC.md](CdC.md) for the full implementation plan.

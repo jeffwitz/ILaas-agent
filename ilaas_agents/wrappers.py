@@ -23,9 +23,13 @@ def install_wrappers(wrapper_dir: Path | None = None) -> list[Path]:
 
 def write_posix_wrapper(wrapper_dir: Path, name: str) -> Path:
     target = wrapper_dir / name
+    command = name.removeprefix("Ilaas-")
+    repo = paths.repo_root()
     target.write_text(
         "#!/usr/bin/env bash\n"
-        f"exec {paths.repo_root() / name} \"$@\"\n"
+        "set -euo pipefail\n"
+        f"export PYTHONPATH=\"{repo}${{PYTHONPATH:+:$PYTHONPATH}}\"\n"
+        f"exec python3 -m ilaas_agents.cli {command} \"$@\"\n"
     )
     target.chmod(target.stat().st_mode | 0o755)
     return target
@@ -36,8 +40,15 @@ def write_windows_wrappers(wrapper_dir: Path, name: str) -> list[Path]:
     module = name.replace("Ilaas-", "")
     cmd = wrapper_dir / f"{name}.cmd"
     ps1 = wrapper_dir / f"{name}.ps1"
-    cmd.write_text(f'@echo off\r\npython -m ilaas_agents.cli {module} %*\r\n')
-    ps1.write_text(f'python -m ilaas_agents.cli {module} @args\r\n')
+    cmd.write_text(
+        "@echo off\r\n"
+        f"set PYTHONPATH={repo};%PYTHONPATH%\r\n"
+        f"python -m ilaas_agents.cli {module} %*\r\n"
+    )
+    ps1.write_text(
+        f'$env:PYTHONPATH = "{repo};" + $env:PYTHONPATH\r\n'
+        f'python -m ilaas_agents.cli {module} @args\r\n'
+    )
     return [cmd, ps1]
 
 

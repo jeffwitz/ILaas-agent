@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 import argparse
-import os
-import subprocess
 import sys
 
-from . import doctor, models, paths
+from . import doctor, models, paths, runners
 from .install import main as install_main
 
 
@@ -22,36 +20,40 @@ def refresh_models() -> None:
         print(model_id)
 
 
-def exec_root_script(name: str, argv: list[str]) -> int:
-    script = paths.repo_root() / f"Ilaas-{name}"
-    if paths.is_windows():
-        raise SystemExit(f"Windows native runner for {name} is not implemented yet. Use WSL2 for now.")
-    if not script.exists():
-        raise SystemExit(f"Missing script: {script}")
-    os.execv(str(script), [str(script), *argv])
-    return 127
-
-
 def main() -> None:
+    if len(sys.argv) >= 2 and sys.argv[1] == "install":
+        sys.argv = [sys.argv[0], *sys.argv[2:]]
+        install_main()
+        return
+
+    if len(sys.argv) >= 2 and sys.argv[1] in {"codex", "claude", "opencode"}:
+        command = sys.argv[1]
+        argv = sys.argv[2:]
+        if command == "codex":
+            raise SystemExit(runners.run_codex(argv))
+        if command == "claude":
+            raise SystemExit(runners.run_claude(argv))
+        raise SystemExit(runners.run_opencode(argv))
+
     parser = argparse.ArgumentParser(description="ILaaS code-agent helper CLI.")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("install")
     sub.add_parser("doctor")
     sub.add_parser("refresh-models")
-    for name in ["codex", "claude", "opencode"]:
-        p = sub.add_parser(name)
-        p.add_argument("args", nargs=argparse.REMAINDER)
+
+    servers = sub.add_parser("servers")
+    servers.add_argument("action", choices=["start", "stop", "status", "logs"])
+
     args = parser.parse_args()
 
     if args.command == "install":
-        sys.argv = [sys.argv[0]]
         install_main()
     elif args.command == "doctor":
         raise SystemExit(doctor.run())
     elif args.command == "refresh-models":
         refresh_models()
-    elif args.command in {"codex", "claude", "opencode"}:
-        raise SystemExit(exec_root_script(args.command, args.args))
+    elif args.command == "servers":
+        raise SystemExit(runners.servers(args.action))
     else:
         parser.error("unknown command")
 
