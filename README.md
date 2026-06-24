@@ -59,6 +59,7 @@ python -m ilaas_agents.cli servers status
 python -m ilaas_agents.cli servers start
 python -m ilaas_agents.cli servers stop
 python -m ilaas_agents.cli smoke --agent opencode --model qwen-3.6-35b-instruct
+python scripts/clone_isolated_check.py
 ```
 
 `doctor` avoids token-consuming prompts. `smoke` intentionally runs model calls and may consume tokens.
@@ -105,6 +106,19 @@ The Linux path is validated locally with the Python runners:
 Codex CLI -> OK, Responses proxy, tokens consumed
 Claude Code -> OK with qwen-3.6-35b-instruct
 OpenCode -> OK with qwen-3.6-35b-instruct and Read tool
+```
+
+The installer supports path overrides for isolated tests and advanced installs:
+
+```text
+ILAAS_HOME
+ILAAS_CONFIG_HOME
+ILAAS_CACHE_HOME
+ILAAS_BIN_DIR
+ILAAS_LITELLM_CONFIG
+ILAAS_CODEX_HOME
+ILAAS_MODEL_CATALOG
+ILAAS_LITELLM_VENV
 ```
 
 Windows native support is planned but should be considered experimental until tested. On Windows, WSL2 is the recommended path for now.

@@ -18,3 +18,5 @@ jobs:
         run: bash -n Ilaas-codex Ilaas-claude Ilaas-opencode Ilaas-doctor Ilaas-servers install.sh
       - name: Unit tests
         run: python -m unittest discover -s tests
+      - name: Clone isolated check
+        run: python scripts/clone_isolated_check.py --workdir /tmp/ilaas-agent-ci-clone

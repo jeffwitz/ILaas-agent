@@ -16,8 +16,13 @@ def is_windows() -> bool:
     return system().startswith("win")
 
 
+def env_path(name: str, fallback: Path) -> Path:
+    value = os.environ.get(name)
+    return Path(value).expanduser() if value else fallback
+
+
 def home() -> Path:
-    return Path.home()
+    return env_path("ILAAS_HOME", Path.home())
 
 
 def repo_root() -> Path:
@@ -25,12 +30,16 @@ def repo_root() -> Path:
 
 
 def config_home() -> Path:
+    if os.environ.get("ILAAS_CONFIG_HOME"):
+        return Path(os.environ["ILAAS_CONFIG_HOME"]).expanduser()
     if is_windows():
         return Path(os.environ.get("APPDATA", home() / "AppData/Roaming"))
     return Path(os.environ.get("XDG_CONFIG_HOME", home() / ".config"))
 
 
 def cache_home() -> Path:
+    if os.environ.get("ILAAS_CACHE_HOME"):
+        return Path(os.environ["ILAAS_CACHE_HOME"]).expanduser()
     if is_windows():
         return Path(os.environ.get("LOCALAPPDATA", home() / "AppData/Local"))
     if system() == "darwin":
@@ -39,17 +48,19 @@ def cache_home() -> Path:
 
 
 def bin_dir() -> Path:
+    if os.environ.get("ILAAS_BIN_DIR"):
+        return Path(os.environ["ILAAS_BIN_DIR"]).expanduser()
     if is_windows():
         return Path(os.environ.get("LOCALAPPDATA", home() / "AppData/Local")) / "Programs" / "IlaasCodeAgents" / "bin"
     return home() / ".local" / "bin"
 
 
 def litellm_config_path() -> Path:
-    return config_home() / "litellm" / "ilaas-mistral.yaml"
+    return env_path("ILAAS_LITELLM_CONFIG", config_home() / "litellm" / "ilaas-mistral.yaml")
 
 
 def codex_home() -> Path:
-    return home() / ".codex-ilaas"
+    return env_path("ILAAS_CODEX_HOME", home() / ".codex-ilaas")
 
 
 def codex_config_path() -> Path:
@@ -57,7 +68,7 @@ def codex_config_path() -> Path:
 
 
 def model_catalog_path() -> Path:
-    return codex_home() / "model-catalogs" / "ilaas-mistral.json"
+    return env_path("ILAAS_MODEL_CATALOG", codex_home() / "model-catalogs" / "ilaas-mistral.json")
 
 
 def log_dir() -> Path:
@@ -69,6 +80,4 @@ def runtime_dir() -> Path:
 
 
 def litellm_venv() -> Path:
-    if is_windows():
-        return home() / ".venvs" / "litellm"
-    return home() / ".venvs" / "litellm"
+    return env_path("ILAAS_LITELLM_VENV", home() / ".venvs" / "litellm")

@@ -177,6 +177,7 @@ Done:
 - Unit tests under `tests/` added.
 - GitHub Actions CI added.
 - Clean clone basic checks validated from `/tmp`.
+- Isolated path overrides added for test installs without touching the real HOME/config.
 
 Partial:
 
@@ -186,14 +187,14 @@ Partial:
 
 Not done yet:
 
-- Clean clone installation test with isolated home/config.
+- Full isolated install test against real ILaaS `/v1/models` without mocking network.
 - macOS validation.
 - Windows native validation.
 
 ## Recommended Next Implementation Steps
 
-1. Add isolated-home install tests that do not touch the user's real config.
-2. Expand unit coverage for `paths` and Windows wrapper generation.
+1. Add full isolated install smoke using a real ILaaS key but fake HOME/config paths.
+2. Expand unit coverage for Windows wrapper generation.
 3. Decide whether `--force` should remain idempotent or perform explicit backup/overwrite flows.
 4. Validate macOS.
 5. Validate Windows via WSL2.
@@ -209,6 +210,7 @@ bash -n Ilaas-codex Ilaas-claude Ilaas-opencode Ilaas-doctor Ilaas-servers insta
 Ilaas-doctor
 Ilaas-opencode run --model qwen-3.6-35b-instruct "Réponds exactement: OK"
 python -m unittest discover -s tests
+python scripts/clone_isolated_check.py
 ```
 
 Optional token-consuming checks:

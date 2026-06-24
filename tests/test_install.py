@@ -10,9 +10,16 @@ from ilaas_agents import install
 
 
 class InstallTest(unittest.TestCase):
-    def test_prefix_installs_wrappers_under_prefix_bin(self):
+    def test_isolated_install_writes_under_overridden_paths(self):
         with tempfile.TemporaryDirectory() as tmp:
-            prefix = Path(tmp) / "prefix"
+            root = Path(tmp)
+            prefix = root / "prefix"
+            env = {
+                "ILAAS_API_KEY": "dummy",
+                "ILAAS_HOME": str(root / "home"),
+                "ILAAS_CONFIG_HOME": str(root / "config"),
+                "ILAAS_CACHE_HOME": str(root / "cache"),
+            }
             args = argparse.Namespace(
                 skip_litellm_install=True,
                 api_base="https://example.invalid/v1",
@@ -21,13 +28,13 @@ class InstallTest(unittest.TestCase):
                 prefix=str(prefix),
                 force=True,
             )
-            with mock.patch.dict("os.environ", {"ILAAS_API_KEY": "dummy"}, clear=False), \
-                 mock.patch("ilaas_agents.models.fetch_models", return_value=["mistral-medium-latest", "qwen-3.6-35b-instruct"]), \
-                 mock.patch("ilaas_agents.paths.litellm_config_path", return_value=Path(tmp) / "litellm.yaml"), \
-                 mock.patch("ilaas_agents.paths.model_catalog_path", return_value=Path(tmp) / "catalog.json"), \
-                 mock.patch("ilaas_agents.paths.codex_config_path", return_value=Path(tmp) / "config.toml"):
+            with mock.patch.dict("os.environ", env, clear=False), \
+                 mock.patch("ilaas_agents.models.fetch_models", return_value=["mistral-medium-latest", "qwen-3.6-35b-instruct"]):
                 with contextlib.redirect_stdout(io.StringIO()):
                     install.run_install(args)
+            self.assertTrue((root / "config" / "litellm" / "ilaas-mistral.yaml").exists())
+            self.assertTrue((root / "home" / ".codex-ilaas" / "config.toml").exists())
+            self.assertTrue((root / "home" / ".codex-ilaas" / "model-catalogs" / "ilaas-mistral.json").exists())
             self.assertTrue((prefix / "bin" / "Ilaas-codex").exists())
             self.assertTrue((prefix / "bin" / "Ilaas-doctor").exists())
 
