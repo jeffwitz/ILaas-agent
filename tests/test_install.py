@@ -27,6 +27,9 @@ class InstallTest(unittest.TestCase):
                 non_interactive=True,
                 prefix=str(prefix),
                 force=True,
+                check_agent_deps=False,
+                install_agent_deps=False,
+                install_agent=None,
             )
             with mock.patch.dict("os.environ", env, clear=False), \
                  mock.patch("ilaas_agents.models.fetch_models", return_value=["mistral-medium-latest", "qwen-3.6-35b-instruct"]):

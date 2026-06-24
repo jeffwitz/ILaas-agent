@@ -7,7 +7,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from . import paths
+from . import deps, paths
 
 
 def port_open(host: str, port: int) -> bool:
@@ -54,9 +54,10 @@ def run() -> int:
         ("Codex proxy port 4001", port_open("127.0.0.1", 4001), "127.0.0.1:4001"),
         ("Claude proxy port 4002", port_open("127.0.0.1", 4002), "127.0.0.1:4002"),
     ]
-    for command in ["codex", "claude", "opencode"]:
-        version = command_version(command)
-        checks.append((command, version is not None, version or "not found"))
+    for key, ok, detail in deps.runtime_statuses():
+        checks.append((key, ok, detail))
+    for key, ok, detail in deps.agent_statuses():
+        checks.append((key, ok, detail))
 
     if port_open("127.0.0.1", 4000):
         checks.append(http_json_ok("LiteLLM /v1/models", "http://127.0.0.1:4000/v1/models"))

@@ -7,7 +7,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from . import config, models, paths, wrappers
+from . import config, deps, models, paths, wrappers
 
 
 def litellm_bin() -> str:
@@ -62,6 +62,14 @@ def run_install(args: argparse.Namespace) -> None:
     if hint:
         print(f"PATH warning: {hint}")
 
+    if args.check_agent_deps or args.install_agent_deps:
+        deps.print_status()
+    if args.install_agent_deps:
+        selected = args.install_agent or ["all"]
+        deps.install_agents(selected)
+    elif args.check_agent_deps and not args.non_interactive:
+        deps.prompt_install_missing()
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Install ILaaS local code-agent tooling.")
@@ -71,5 +79,8 @@ def main() -> None:
     parser.add_argument("--skip-litellm-install", action="store_true")
     parser.add_argument("--prefix", default=None, help="Install wrappers into PREFIX/bin instead of the platform default bin directory.")
     parser.add_argument("--force", action="store_true", help="Accepted for idempotent reinstall workflows; generated files are overwritten safely.")
+    parser.add_argument("--check-agent-deps", action="store_true", help="Detect Codex, Claude Code, OpenCode, Node and npm after installing ILaaS configs.")
+    parser.add_argument("--install-agent-deps", action="store_true", help="Install missing selected code-agent CLIs with npm. Opt-in only.")
+    parser.add_argument("--install-agent", action="append", choices=["all", "codex", "claude", "opencode"], help="Limit --install-agent-deps to a specific agent. Can be repeated.")
     args = parser.parse_args()
     run_install(args)

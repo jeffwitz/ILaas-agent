@@ -70,6 +70,7 @@ Ilaas-codex exec --skip-git-repo-check "Réponds exactement: OK"
 Ilaas-claude -p --model qwen-3.6-35b-instruct "Réponds exactement: OK"
 Ilaas-opencode run --model qwen-3.6-35b-instruct "Réponds exactement: OK"
 python -m ilaas_agents.cli smoke --agent opencode --model qwen-3.6-35b-instruct
+python -m ilaas_agents.cli deps status
 ```
 
 `smoke` intentionally consumes tokens; `doctor` does not run prompt-based checks by default.
@@ -178,6 +179,7 @@ Done:
 - GitHub Actions CI added.
 - Clean clone basic checks validated from `/tmp`.
 - Isolated path overrides added for test installs without touching the real HOME/config.
+- External agent dependency detection and opt-in npm installation added.
 
 Partial:
 
@@ -194,7 +196,8 @@ Not done yet:
 ## Recommended Next Implementation Steps
 
 1. Add full isolated install smoke using a real ILaaS key but fake HOME/config paths.
-2. Expand unit coverage for Windows wrapper generation.
+2. Validate dependency installation on a clean Node/npm environment.
+3. Expand unit coverage for Windows wrapper generation.
 3. Decide whether `--force` should remain idempotent or perform explicit backup/overwrite flows.
 4. Validate macOS.
 5. Validate Windows via WSL2.

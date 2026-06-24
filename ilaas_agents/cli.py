@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from . import doctor, models, paths, runners, smoke
+from . import deps, doctor, models, paths, runners, smoke
 from .install import main as install_main
 
 
@@ -43,6 +43,13 @@ def main() -> None:
 
     servers = sub.add_parser("servers")
     servers.add_argument("action", choices=["start", "stop", "status", "logs"])
+
+    deps_parser = sub.add_parser("deps", help="Detect or install external code-agent CLI dependencies.")
+    deps_sub = deps_parser.add_subparsers(dest="deps_action", required=True)
+    deps_sub.add_parser("status")
+    deps_install = deps_sub.add_parser("install")
+    deps_install.add_argument("agents", nargs="*", choices=["all", "codex", "claude", "opencode"], default=["all"])
+
     smoke.add_parser(sub)
 
     args = parser.parse_args()
@@ -55,6 +62,12 @@ def main() -> None:
         refresh_models()
     elif args.command == "servers":
         raise SystemExit(runners.servers(args.action))
+    elif args.command == "deps":
+        if args.deps_action == "status":
+            deps.print_status()
+            raise SystemExit(0)
+        deps.install_agents(args.agents)
+        raise SystemExit(0)
     elif args.command == "smoke":
         raise SystemExit(smoke.run(args))
     else:

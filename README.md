@@ -60,6 +60,8 @@ python -m ilaas_agents.cli servers start
 python -m ilaas_agents.cli servers stop
 python -m ilaas_agents.cli smoke --agent opencode --model qwen-3.6-35b-instruct
 python scripts/clone_isolated_check.py
+python -m ilaas_agents.cli deps status
+python -m ilaas_agents.cli deps install opencode
 ```
 
 `doctor` avoids token-consuming prompts. `smoke` intentionally runs model calls and may consume tokens.
@@ -132,6 +134,7 @@ docs/opencode.md
 docs/models.md
 docs/windows.md
 docs/troubleshooting.md
+docs/dependencies.md
 ```
 
 See [CdC.md](CdC.md) for the full implementation plan, and [CODEX.md](CODEX.md) for current maintainer notes.
