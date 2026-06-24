@@ -20,7 +20,7 @@ The wrapper accepts raw ILaaS slugs and rewrites them automatically.
 
 ```bash
 Ilaas-claude --list-models
-Ilaas-claude -p --model qwen-3.6-35b-instruct "Réponds exactement: OK"
+Ilaas-claude -p --model qwen-3.6-35b-instruct "Reply exactly: OK"
 ```
 
 Tool smoke test:
@@ -28,7 +28,7 @@ Tool smoke test:
 ```bash
 Ilaas-claude -p --model qwen-3.6-35b-instruct \
   --allowedTools Read --permission-mode bypassPermissions \
-  "Lis le fichier refresh_ilaas_models.py et réponds uniquement avec la valeur de DEFAULT_ALIAS."
+  "Read the file refresh_ilaas_models.py and reply only with the value of DEFAULT_ALIAS."
 ```
 
 The wrapper sets:

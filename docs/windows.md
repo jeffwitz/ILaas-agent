@@ -28,5 +28,5 @@ Before marking Windows native as supported, validate:
 ```powershell
 python install.py --non-interactive --skip-litellm-install
 Ilaas-doctor
-Ilaas-opencode run --model qwen-3.6-35b-instruct "Réponds exactement: OK"
+Ilaas-opencode run --model qwen-3.6-35b-instruct "Reply exactly: OK"
 ```

@@ -66,9 +66,9 @@ Ilaas-servers logs
 Agent commands:
 
 ```bash
-Ilaas-codex exec --skip-git-repo-check "Réponds exactement: OK"
-Ilaas-claude -p --model qwen-3.6-35b-instruct "Réponds exactement: OK"
-Ilaas-opencode run --model qwen-3.6-35b-instruct "Réponds exactement: OK"
+Ilaas-codex exec --skip-git-repo-check "Reply exactly: OK"
+Ilaas-claude -p --model qwen-3.6-35b-instruct "Reply exactly: OK"
+Ilaas-opencode run --model qwen-3.6-35b-instruct "Reply exactly: OK"
 python -m ilaas_agents.cli smoke --agent opencode --model qwen-3.6-35b-instruct
 python -m ilaas_agents.cli deps status
 ```
@@ -211,7 +211,7 @@ Run before commit:
 python3 -m py_compile install.py ilaas_agents/*.py proxies/*.py
 bash -n Ilaas-codex Ilaas-claude Ilaas-opencode Ilaas-doctor Ilaas-servers install.sh
 Ilaas-doctor
-Ilaas-opencode run --model qwen-3.6-35b-instruct "Réponds exactement: OK"
+Ilaas-opencode run --model qwen-3.6-35b-instruct "Reply exactly: OK"
 python -m unittest discover -s tests
 python scripts/clone_isolated_check.py
 ```
@@ -219,8 +219,8 @@ python scripts/clone_isolated_check.py
 Optional token-consuming checks:
 
 ```bash
-Ilaas-codex exec --skip-git-repo-check "Réponds exactement: OK"
-Ilaas-claude -p --model qwen-3.6-35b-instruct "Réponds exactement: OK"
+Ilaas-codex exec --skip-git-repo-check "Reply exactly: OK"
+Ilaas-claude -p --model qwen-3.6-35b-instruct "Reply exactly: OK"
 ```
 
 ## Commit / Push

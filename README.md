@@ -1,12 +1,183 @@
 # ILaaS Agent
 
-Installable local tooling to use ILaaS models with code agents:
+Run Codex CLI, Claude Code, and OpenCode with ILaaS models through a local LiteLLM gateway.
 
-- Codex CLI
-- Claude Code
-- OpenCode
+This repository is meant to be practical first: clone it, install it, run an agent, then read the implementation details if you need them.
 
-The current implementation uses LiteLLM as the local OpenAI-compatible gateway, plus small compatibility proxies where an agent expects a different API shape.
+## What You Get
+
+After installation, these commands are available:
+
+```bash
+Ilaas-codex
+Ilaas-claude
+Ilaas-opencode
+Ilaas-doctor
+Ilaas-servers
+```
+
+They let you use the same ILaaS model catalog from three code-agent tools:
+
+| Tool | Command | Local interface |
+| --- | --- | --- |
+| Codex CLI | `Ilaas-codex` | OpenAI Responses-compatible proxy |
+| Claude Code | `Ilaas-claude` | Anthropic Messages-compatible proxy |
+| OpenCode | `Ilaas-opencode` | OpenAI-compatible provider via LiteLLM |
+
+## Quick Start
+
+```bash
+git clone https://github.com/jeffwitz/ILaas-agent.git
+cd ILaas-agent
+ILAAS_API_KEY="your_ilaas_key" python3 install.py
+```
+
+If `~/.local/bin` is not already in your shell path:
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+Check the installation:
+
+```bash
+Ilaas-doctor
+```
+
+Run the fastest practical smoke test:
+
+```bash
+Ilaas-opencode run --model qwen-3.6-35b-instruct "Reply exactly: OK"
+```
+
+## Run Each Agent
+
+Codex CLI:
+
+```bash
+Ilaas-codex exec --skip-git-repo-check "Reply exactly: OK"
+```
+
+Claude Code:
+
+```bash
+Ilaas-claude -p --model qwen-3.6-35b-instruct "Reply exactly: OK"
+```
+
+OpenCode:
+
+```bash
+Ilaas-opencode run --model qwen-3.6-35b-instruct "Reply exactly: OK"
+```
+
+List available models:
+
+```bash
+Ilaas-opencode --list-models
+Ilaas-claude --list-models
+```
+
+## Install Missing Agent CLIs
+
+The installer does not modify global npm packages unless you explicitly ask it to.
+
+Detect what is installed:
+
+```bash
+python3 -m ilaas_agents.cli deps status
+```
+
+Install all missing supported CLIs:
+
+```bash
+python3 -m ilaas_agents.cli deps install all
+```
+
+Install only one:
+
+```bash
+python3 -m ilaas_agents.cli deps install codex
+python3 -m ilaas_agents.cli deps install claude
+python3 -m ilaas_agents.cli deps install opencode
+```
+
+Packages used:
+
+```text
+codex    -> npm install -g @openai/codex
+claude   -> npm install -g @anthropic-ai/claude-code
+opencode -> npm install -g opencode-ai
+```
+
+## Useful Install Options
+
+```bash
+python3 install.py --check-agent-deps
+python3 install.py --check-agent-deps --install-agent-deps
+python3 install.py --prefix ~/.local
+python3 install.py --force
+python3 install.py --skip-litellm-install
+```
+
+The ILaaS API key is written only to the local LiteLLM config, outside the repository.
+
+Default generated paths on Linux:
+
+```text
+~/.config/litellm/ilaas-mistral.yaml
+~/.codex-ilaas/config.toml
+~/.codex-ilaas/model-catalogs/ilaas-mistral.json
+~/.local/bin/Ilaas-*
+```
+
+## Test Without Touching Your Real Config
+
+```bash
+export ILAAS_HOME=/tmp/ilaas-test-home
+export ILAAS_CONFIG_HOME=/tmp/ilaas-test-config
+export ILAAS_CACHE_HOME=/tmp/ilaas-test-cache
+export ILAAS_BIN_DIR=/tmp/ilaas-test-bin
+
+ILAAS_API_KEY="your_ilaas_key" python3 install.py --prefix /tmp/ilaas-test
+export PATH="/tmp/ilaas-test/bin:$PATH"
+
+Ilaas-doctor
+Ilaas-opencode run --model qwen-3.6-35b-instruct "Reply exactly: OK"
+```
+
+## Server Management
+
+The wrappers start the local services they need on demand. You can also manage them explicitly:
+
+```bash
+Ilaas-servers status
+Ilaas-servers start
+Ilaas-servers stop
+Ilaas-servers logs
+```
+
+## Recommended Models
+
+Recommended for code-agent use:
+
+```text
+qwen-3.6-35b-instruct
+mistral-medium-latest
+gemma-4-31b
+```
+
+Currently not recommended for code-agent tool use:
+
+```text
+llama-3.1-8b
+llama-3.3-70b
+```
+
+They may answer simple chat prompts, but their tool-calling path is weak or broken in the tested LiteLLM/ILaaS setups.
+
+## How The Interfaces Fit Together
+
+The project keeps one ILaaS/LiteLLM backend and adapts it to each agent frontend:
 
 ```text
 ILaaS
@@ -16,125 +187,37 @@ ILaaS
     <- OpenCode OpenAI-compatible provider directly
 ```
 
-## Quick Start
+Short version:
 
-```bash
-git clone https://github.com/jeffwitz/ILaas-agent.git
-cd ILaas-agent
-python install.py
-```
+- LiteLLM talks to ILaaS through `/v1/chat/completions`.
+- Codex CLI expects `/v1/responses`, so this repo provides a local Responses proxy.
+- Claude Code expects Anthropic `/v1/messages`, so this repo provides a local Messages proxy.
+- OpenCode can use an OpenAI-compatible provider directly, so it points to LiteLLM.
 
-Useful install options:
+Read the details in [docs/interfaces.md](docs/interfaces.md).
 
-```bash
-python install.py --non-interactive --skip-litellm-install
-python install.py --prefix ~/.local
-python install.py --force
-```
+## Documentation
 
-The installer never writes API keys into the repository. Provide the ILaaS key with:
-
-```bash
-ILAAS_API_KEY=... python install.py
-```
-
-or enter it interactively when prompted.
-
-After installation:
-
-```bash
-Ilaas-codex exec --skip-git-repo-check "Réponds exactement: OK"
-Ilaas-claude -p --model qwen-3.6-35b-instruct "Réponds exactement: OK"
-Ilaas-opencode run --model qwen-3.6-35b-instruct "Réponds exactement: OK"
-```
-
-## Shared CLI
-
-The wrappers call a shared Python CLI:
-
-```bash
-python -m ilaas_agents.cli doctor
-python -m ilaas_agents.cli refresh-models
-python -m ilaas_agents.cli servers status
-python -m ilaas_agents.cli servers start
-python -m ilaas_agents.cli servers stop
-python -m ilaas_agents.cli smoke --agent opencode --model qwen-3.6-35b-instruct
-python scripts/clone_isolated_check.py
-python -m ilaas_agents.cli deps status
-python -m ilaas_agents.cli deps install opencode
-```
-
-`doctor` avoids token-consuming prompts. `smoke` intentionally runs model calls and may consume tokens.
-
-`servers start` launches LiteLLM plus the Codex and Claude compatibility proxies as persistent background services. The agent wrappers can also start only what they need for a single run.
-
-## Model Refresh
-
-```bash
-python -m ilaas_agents.cli refresh-models
-```
-
-This updates:
+Start here:
 
 ```text
-~/.config/litellm/ilaas-mistral.yaml
-~/.codex-ilaas/model-catalogs/ilaas-mistral.json
-```
-
-## Recommended Models
-
-For code-agent use:
-
-```text
-qwen-3.6-35b-instruct
-mistral-medium-latest
-gemma-4-31b
-```
-
-Currently not recommended for code agents:
-
-```text
-llama-3.1-8b
-llama-3.3-70b
-```
-
-They may answer simple chat prompts, but their tool-calling path is weak or broken in the tested LiteLLM/ILaaS setups.
-
-## Status
-
-The Linux path is validated locally with the Python runners:
-
-```text
-Codex CLI -> OK, Responses proxy, tokens consumed
-Claude Code -> OK with qwen-3.6-35b-instruct
-OpenCode -> OK with qwen-3.6-35b-instruct and Read tool
-```
-
-The installer supports path overrides for isolated tests and advanced installs:
-
-```text
-ILAAS_HOME
-ILAAS_CONFIG_HOME
-ILAAS_CACHE_HOME
-ILAAS_BIN_DIR
-ILAAS_LITELLM_CONFIG
-ILAAS_CODEX_HOME
-ILAAS_MODEL_CATALOG
-ILAAS_LITELLM_VENV
-```
-
-Windows native support is planned but should be considered experimental until tested. On Windows, WSL2 is the recommended path for now.
-
-Detailed docs:
-
-```text
+docs/interfaces.md
+docs/dependencies.md
 docs/codex.md
 docs/claude-code.md
 docs/opencode.md
 docs/models.md
-docs/windows.md
 docs/troubleshooting.md
-docs/dependencies.md
+docs/windows.md
 ```
 
-See [CdC.md](CdC.md) for the full implementation plan, and [CODEX.md](CODEX.md) for current maintainer notes.
+Maintainer notes are in [CODEX.md](CODEX.md). The implementation roadmap is in [CdC.md](CdC.md).
+
+## Development Checks
+
+```bash
+python3 -m py_compile install.py ilaas_agents/*.py proxies/*.py scripts/clone_isolated_check.py
+python3 -m unittest discover -s tests
+bash -n Ilaas-codex Ilaas-claude Ilaas-opencode Ilaas-doctor Ilaas-servers install.sh
+python3 scripts/clone_isolated_check.py
+```

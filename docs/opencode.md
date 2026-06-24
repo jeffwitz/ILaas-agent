@@ -18,15 +18,15 @@ The wrapper accepts raw ILaaS slugs and rewrites them automatically.
 
 ```bash
 Ilaas-opencode --list-models
-Ilaas-opencode run --model qwen-3.6-35b-instruct "Réponds exactement: OK"
-Ilaas-opencode run -m ilaas/qwen-3.6-35b-instruct "Réponds exactement: OK"
+Ilaas-opencode run --model qwen-3.6-35b-instruct "Reply exactly: OK"
+Ilaas-opencode run -m ilaas/qwen-3.6-35b-instruct "Reply exactly: OK"
 ```
 
 Tool smoke test:
 
 ```bash
 Ilaas-opencode run --model qwen-3.6-35b-instruct \
-  "Lis le fichier refresh_ilaas_models.py et réponds uniquement avec la valeur de DEFAULT_ALIAS."
+  "Read the file refresh_ilaas_models.py and reply only with the value of DEFAULT_ALIAS."
 ```
 
 Validated locally with Qwen and the OpenCode `Read` tool.

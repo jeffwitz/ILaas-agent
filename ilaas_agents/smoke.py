@@ -17,9 +17,9 @@ def run(args: argparse.Namespace) -> int:
 
 def run_agent(agent: str, model: str, tool_test: bool) -> int:
     if tool_test:
-        prompt = "Lis le fichier refresh_ilaas_models.py et réponds uniquement avec la valeur de DEFAULT_ALIAS."
+        prompt = "Read the file refresh_ilaas_models.py and reply only with the value of DEFAULT_ALIAS."
     else:
-        prompt = "Réponds exactement: OK"
+        prompt = "Reply exactly: OK"
 
     print(f"[SMOKE] {agent} model={model} tool_test={tool_test}", flush=True)
     if agent == "codex":

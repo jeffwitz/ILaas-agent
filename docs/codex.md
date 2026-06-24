@@ -13,8 +13,8 @@ The proxy is required because LiteLLM `/v1/responses` returned empty output and 
 ## Usage
 
 ```bash
-Ilaas-codex exec --skip-git-repo-check "Réponds exactement: OK"
-Ilaas-codex exec --model qwen-3.6-35b-instruct --skip-git-repo-check "Réponds exactement: OK"
+Ilaas-codex exec --skip-git-repo-check "Reply exactly: OK"
+Ilaas-codex exec --model qwen-3.6-35b-instruct --skip-git-repo-check "Reply exactly: OK"
 ```
 
 The wrapper sets:
