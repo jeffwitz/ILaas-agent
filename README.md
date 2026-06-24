@@ -24,6 +24,14 @@ cd ILaas-agent
 python install.py
 ```
 
+Useful install options:
+
+```bash
+python install.py --non-interactive --skip-litellm-install
+python install.py --prefix ~/.local
+python install.py --force
+```
+
 The installer never writes API keys into the repository. Provide the ILaaS key with:
 
 ```bash
@@ -50,7 +58,10 @@ python -m ilaas_agents.cli refresh-models
 python -m ilaas_agents.cli servers status
 python -m ilaas_agents.cli servers start
 python -m ilaas_agents.cli servers stop
+python -m ilaas_agents.cli smoke --agent opencode --model qwen-3.6-35b-instruct
 ```
+
+`doctor` avoids token-consuming prompts. `smoke` intentionally runs model calls and may consume tokens.
 
 `servers start` launches LiteLLM plus the Codex and Claude compatibility proxies as persistent background services. The agent wrappers can also start only what they need for a single run.
 
@@ -98,4 +109,15 @@ OpenCode -> OK with qwen-3.6-35b-instruct and Read tool
 
 Windows native support is planned but should be considered experimental until tested. On Windows, WSL2 is the recommended path for now.
 
-See [CdC.md](CdC.md) for the full implementation plan.
+Detailed docs:
+
+```text
+docs/codex.md
+docs/claude-code.md
+docs/opencode.md
+docs/models.md
+docs/windows.md
+docs/troubleshooting.md
+```
+
+See [CdC.md](CdC.md) for the full implementation plan, and [CODEX.md](CODEX.md) for current maintainer notes.

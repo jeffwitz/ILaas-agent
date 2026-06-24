@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from . import doctor, models, paths, runners
+from . import doctor, models, paths, runners, smoke
 from .install import main as install_main
 
 
@@ -43,6 +43,7 @@ def main() -> None:
 
     servers = sub.add_parser("servers")
     servers.add_argument("action", choices=["start", "stop", "status", "logs"])
+    smoke.add_parser(sub)
 
     args = parser.parse_args()
 
@@ -54,6 +55,8 @@ def main() -> None:
         refresh_models()
     elif args.command == "servers":
         raise SystemExit(runners.servers(args.action))
+    elif args.command == "smoke":
+        raise SystemExit(smoke.run(args))
     else:
         parser.error("unknown command")
 

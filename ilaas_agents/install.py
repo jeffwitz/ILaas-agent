@@ -5,6 +5,7 @@ import getpass
 import os
 import subprocess
 import sys
+from pathlib import Path
 
 from . import config, models, paths, wrappers
 
@@ -49,14 +50,15 @@ def run_install(args: argparse.Namespace) -> None:
     models.write_litellm_config(paths.litellm_config_path(), api_base, api_key, model_ids)
     models.write_codex_catalog(paths.model_catalog_path(), model_ids)
     config.write_codex_config(paths.codex_config_path(), paths.model_catalog_path())
-    installed = wrappers.install_wrappers()
+    wrapper_dir = Path(args.prefix).expanduser() / "bin" if args.prefix else None
+    installed = wrappers.install_wrappers(wrapper_dir)
 
     print(f"Installed LiteLLM config: {paths.litellm_config_path()}")
     print(f"Installed Codex config: {paths.codex_config_path()}")
     print(f"Installed model catalog: {paths.model_catalog_path()}")
     for path in installed:
         print(f"Installed wrapper: {path}")
-    hint = wrappers.path_hint()
+    hint = wrappers.path_hint(wrapper_dir)
     if hint:
         print(f"PATH warning: {hint}")
 
@@ -67,5 +69,7 @@ def main() -> None:
     parser.add_argument("--api-key-env", default="ILAAS_API_KEY")
     parser.add_argument("--api-base", default=None)
     parser.add_argument("--skip-litellm-install", action="store_true")
+    parser.add_argument("--prefix", default=None, help="Install wrappers into PREFIX/bin instead of the platform default bin directory.")
+    parser.add_argument("--force", action="store_true", help="Accepted for idempotent reinstall workflows; generated files are overwritten safely.")
     args = parser.parse_args()
     run_install(args)

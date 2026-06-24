@@ -69,7 +69,10 @@ Agent commands:
 Ilaas-codex exec --skip-git-repo-check "Réponds exactement: OK"
 Ilaas-claude -p --model qwen-3.6-35b-instruct "Réponds exactement: OK"
 Ilaas-opencode run --model qwen-3.6-35b-instruct "Réponds exactement: OK"
+python -m ilaas_agents.cli smoke --agent opencode --model qwen-3.6-35b-instruct
 ```
+
+`smoke` intentionally consumes tokens; `doctor` does not run prompt-based checks by default.
 
 Model listing:
 
@@ -168,35 +171,33 @@ Done:
 - Codex/Claude/OpenCode runners centralized in Python.
 - Persistent server management added.
 - `Ilaas-doctor` and `Ilaas-servers` wrappers added.
+- `smoke` command added for explicit token-consuming checks.
+- `--prefix` and `--force` install options added.
+- Detailed `docs/*.md` files added.
+- Unit tests under `tests/` added.
+- GitHub Actions CI added.
+- Clean clone basic checks validated from `/tmp`.
 
 Partial:
 
 - Multi-OS support: paths and wrappers are designed for Windows/macOS, but only Linux is validated.
 - Doctor: checks files, commands, ports, LiteLLM `/v1/models`, and proxy `/health`; it does not run token-consuming prompts by default.
-- Installer: still lacks `--prefix` and `--force` from the CdC.
+- Installer: `--force` is accepted for idempotent reinstall workflows, but no destructive reset behavior is implemented.
 
 Not done yet:
 
-- Detailed `docs/*.md` files.
-- Unit tests under `tests/`.
-- GitHub Actions CI.
 - Clean clone installation test with isolated home/config.
 - macOS validation.
 - Windows native validation.
 
 ## Recommended Next Implementation Steps
 
-1. Add unit tests for `paths`, `models`, `wrappers`, and `opencode_config_content`.
-2. Add smoke-test commands that intentionally consume a few tokens, separate from `doctor`.
-3. Add `--prefix` and `--force` to `install.py`.
-4. Create docs:
-   - `docs/codex.md`
-   - `docs/claude-code.md`
-   - `docs/opencode.md`
-   - `docs/windows.md`
-   - `docs/troubleshooting.md`
-5. Add GitHub Actions for syntax/unit tests without requiring an ILaaS key.
-6. Test install from a fresh clone in `/tmp`.
+1. Add isolated-home install tests that do not touch the user's real config.
+2. Expand unit coverage for `paths` and Windows wrapper generation.
+3. Decide whether `--force` should remain idempotent or perform explicit backup/overwrite flows.
+4. Validate macOS.
+5. Validate Windows via WSL2.
+6. Validate Windows native only after Codex/Claude/OpenCode are installed there.
 
 ## Development Checks
 
@@ -207,6 +208,7 @@ python3 -m py_compile install.py ilaas_agents/*.py proxies/*.py
 bash -n Ilaas-codex Ilaas-claude Ilaas-opencode Ilaas-doctor Ilaas-servers install.sh
 Ilaas-doctor
 Ilaas-opencode run --model qwen-3.6-35b-instruct "Réponds exactement: OK"
+python -m unittest discover -s tests
 ```
 
 Optional token-consuming checks:
