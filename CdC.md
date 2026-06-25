@@ -215,6 +215,7 @@ python3 -m py_compile install.py ilaas_agents/*.py proxies/*.py scripts/clone_is
 python3 -m unittest discover -s tests
 bash -n Ilaas-codex Ilaas-claude Ilaas-opencode Ilaas-doctor Ilaas-servers install.sh
 python3 -m sphinx -b html -W --keep-going docs docs/_build/html
+python3 scripts/wine_windows_wrapper_check.py
 python3 scripts/clone_isolated_check.py
 ```
 
@@ -245,6 +246,7 @@ Done:
 - `--force` backups for generated files.
 - Deeper unit tests for proxy tool-call and tool-result translation.
 - Python package console entrypoint `ilaas-agent`.
+- Wine-based `.cmd` wrapper smoke test.
 - Unit tests.
 - CI workflow.
 - Clone-isolated validation helper.
@@ -254,6 +256,7 @@ Remaining work:
 - validate macOS;
 - validate WSL2;
 - validate Windows native wrappers;
+- expand Windows validation beyond Wine `.cmd` smoke tests;
 - add deeper end-to-end integration tests that are opt-in and token-consuming;
 - complete package-first installation so generated wrappers do not depend on keeping the Git clone path;
 - eventually publish a tagged release.

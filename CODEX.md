@@ -224,6 +224,7 @@ bash -n Ilaas-codex Ilaas-claude Ilaas-opencode Ilaas-doctor Ilaas-servers insta
 python3 -m sphinx -b html -W --keep-going docs docs/_build/html
 python3 -m pip install .
 ilaas-agent --help
+python scripts/wine_windows_wrapper_check.py
 Ilaas-doctor
 Ilaas-opencode run --model qwen-3.6-35b-instruct "Reply exactly: OK"
 python -m unittest discover -s tests

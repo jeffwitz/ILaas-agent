@@ -246,5 +246,6 @@ bash -n Ilaas-codex Ilaas-claude Ilaas-opencode Ilaas-doctor Ilaas-servers insta
 python3 -m sphinx -b html -W --keep-going docs docs/_build/html
 python3 -m pip install .
 ilaas-agent --help
+python3 scripts/wine_windows_wrapper_check.py
 python3 scripts/clone_isolated_check.py
 ```
