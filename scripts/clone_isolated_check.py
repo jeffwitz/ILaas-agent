@@ -24,6 +24,7 @@ def main() -> None:
     workdir = Path(args.workdir).resolve()
     clone = workdir / "repo"
     fake = workdir / "fake-home"
+    venv = workdir / "venv"
     if workdir.exists():
         shutil.rmtree(workdir)
     workdir.mkdir(parents=True)
@@ -43,6 +44,11 @@ def main() -> None:
     run([sys.executable, "-m", "py_compile", *py_files], cwd=clone, env=env)
     run([sys.executable, "-m", "unittest", "discover", "-s", "tests"], cwd=clone, env=env)
     run(["bash", "-n", "Ilaas-codex", "Ilaas-claude", "Ilaas-opencode", "Ilaas-doctor", "Ilaas-servers", "install.sh"], cwd=clone, env=env)
+    run([sys.executable, "-m", "venv", str(venv)], cwd=clone, env=env)
+    venv_python = venv / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    venv_cli = venv / ("Scripts/ilaas-agent.exe" if os.name == "nt" else "bin/ilaas-agent")
+    run([str(venv_python), "-m", "pip", "install", "-q", "."], cwd=clone, env=env)
+    run([str(venv_cli), "--help"], cwd=clone, env=env)
     print(f"isolated clone checks OK: {clone}", flush=True)
 
 

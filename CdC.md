@@ -149,10 +149,13 @@ python3 install.py --non-interactive
 python3 install.py --skip-litellm-install
 python3 install.py --prefix ~/.local
 python3 install.py --force
+python3 install.py --codex-sandbox-mode workspace-write
 python3 install.py --check-agent-deps
 python3 install.py --check-agent-deps --install-agent-deps
 python3 install.py --check-agent-deps --install-agent-deps --install-agent opencode
 ```
+
+`--force` creates timestamped backups of generated files before overwriting them.
 
 ## 8. Dependency Handling
 
@@ -211,6 +214,7 @@ Current checks:
 python3 -m py_compile install.py ilaas_agents/*.py proxies/*.py scripts/clone_isolated_check.py
 python3 -m unittest discover -s tests
 bash -n Ilaas-codex Ilaas-claude Ilaas-opencode Ilaas-doctor Ilaas-servers install.sh
+python3 -m sphinx -b html -W --keep-going docs docs/_build/html
 python3 scripts/clone_isolated_check.py
 ```
 
@@ -237,6 +241,10 @@ Done:
 - `Ilaas-doctor` and `Ilaas-servers`.
 - `smoke` command.
 - External dependency detection and opt-in npm install.
+- Configurable Codex sandbox mode.
+- `--force` backups for generated files.
+- Deeper unit tests for proxy tool-call and tool-result translation.
+- Python package console entrypoint `ilaas-agent`.
 - Unit tests.
 - CI workflow.
 - Clone-isolated validation helper.
@@ -246,6 +254,6 @@ Remaining work:
 - validate macOS;
 - validate WSL2;
 - validate Windows native wrappers;
-- decide whether `--force` should create backups before overwrite;
-- add deeper integration tests that are opt-in and token-consuming;
+- add deeper end-to-end integration tests that are opt-in and token-consuming;
+- complete package-first installation so generated wrappers do not depend on keeping the Git clone path;
 - eventually publish a tagged release.

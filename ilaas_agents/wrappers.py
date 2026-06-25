@@ -9,6 +9,17 @@ from . import paths
 POSIX_NAMES = ["Ilaas-codex", "Ilaas-claude", "Ilaas-opencode", "Ilaas-doctor", "Ilaas-servers"]
 
 
+def expected_wrapper_paths(wrapper_dir: Path | None = None) -> list[Path]:
+    wrapper_dir = wrapper_dir or paths.bin_dir()
+    expected = []
+    for name in POSIX_NAMES:
+        if paths.is_windows():
+            expected.extend([wrapper_dir / f"{name}.cmd", wrapper_dir / f"{name}.ps1"])
+        else:
+            expected.append(wrapper_dir / name)
+    return expected
+
+
 def install_wrappers(wrapper_dir: Path | None = None) -> list[Path]:
     wrapper_dir = wrapper_dir or paths.bin_dir()
     wrapper_dir.mkdir(parents=True, exist_ok=True)

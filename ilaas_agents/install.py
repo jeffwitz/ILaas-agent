@@ -3,8 +3,10 @@ from __future__ import annotations
 import argparse
 import getpass
 import os
+import shutil
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 
 from . import config, deps, models, paths, wrappers
@@ -40,6 +42,27 @@ def resolve_api_key(args: argparse.Namespace) -> tuple[str, str]:
     return api_base, api_key
 
 
+def backup_path(path: Path, stamp: str) -> Path:
+    return path.with_name(f"{path.name}.bak-{stamp}")
+
+
+def backup_existing(paths_to_backup: list[Path]) -> list[tuple[Path, Path]]:
+    stamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    backups = []
+    for path in paths_to_backup:
+        if not path.exists() or not path.is_file():
+            continue
+        destination = backup_path(path, stamp)
+        counter = 1
+        while destination.exists():
+            destination = path.with_name(f"{path.name}.bak-{stamp}-{counter}")
+            counter += 1
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, destination)
+        backups.append((path, destination))
+    return backups
+
+
 def run_install(args: argparse.Namespace) -> None:
     if args.codex_sandbox_mode not in config.CODEX_SANDBOX_MODES:
         allowed = ", ".join(config.CODEX_SANDBOX_MODES)
@@ -50,10 +73,21 @@ def run_install(args: argparse.Namespace) -> None:
     if models.DEFAULT_ALIAS_TARGET not in model_ids:
         raise SystemExit(f"Default alias target unavailable on ILaaS: {models.DEFAULT_ALIAS_TARGET}")
 
+    wrapper_dir = Path(args.prefix).expanduser() / "bin" if args.prefix else None
+    backups = []
+    if args.force:
+        backups = backup_existing(
+            [
+                paths.litellm_config_path(),
+                paths.codex_config_path(),
+                paths.model_catalog_path(),
+                *wrappers.expected_wrapper_paths(wrapper_dir),
+            ]
+        )
+
     models.write_litellm_config(paths.litellm_config_path(), api_base, api_key, model_ids)
     models.write_codex_catalog(paths.model_catalog_path(), model_ids)
     config.write_codex_config(paths.codex_config_path(), paths.model_catalog_path(), args.codex_sandbox_mode)
-    wrapper_dir = Path(args.prefix).expanduser() / "bin" if args.prefix else None
     installed = wrappers.install_wrappers(wrapper_dir)
 
     print(f"Installed LiteLLM config: {paths.litellm_config_path()}")
@@ -64,6 +98,8 @@ def run_install(args: argparse.Namespace) -> None:
     print(f"Installed model catalog: {paths.model_catalog_path()}")
     for path in installed:
         print(f"Installed wrapper: {path}")
+    for original, backup in backups:
+        print(f"Backup: {original} -> {backup}")
     hint = wrappers.path_hint(wrapper_dir)
     if hint:
         print(f"PATH warning: {hint}")

@@ -9,5 +9,8 @@ description = "Local ILaaS integration helpers for Codex CLI, Claude Code, and O
 requires-python = ">=3.10"
 dependencies = []
 
+[project.scripts]
+ilaas-agent = "ilaas_agents.cli:main"
+
 [tool.setuptools.packages.find]
-include = ["ilaas_agents*"]
+include = ["ilaas_agents*", "proxies*"]

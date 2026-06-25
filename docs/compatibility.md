@@ -86,6 +86,7 @@ export ILAAS_CODEX_SANDBOX_MODE=workspace-write
 ## Recommended Hardening Before Public Releases
 
 - Add opt-in integration tests for tool-call round trips and upstream errors.
+- Add HTTP-level integration tests for streaming SSE and upstream error responses.
 - Record the tested LiteLLM, Codex CLI, Claude Code, and OpenCode versions for each release.
-- Package the Python code so installed wrappers do not depend on keeping the Git clone in place.
+- Complete package-first installation so generated wrappers do not depend on keeping the Git clone in place.
 - Validate macOS, WSL2, and Windows native behavior separately.

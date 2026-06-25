@@ -17,6 +17,12 @@ class WrappersTest(unittest.TestCase):
         self.assertIn("Ilaas-doctor", wrappers.POSIX_NAMES)
         self.assertIn("Ilaas-servers", wrappers.POSIX_NAMES)
 
+    def test_expected_wrapper_paths_are_posix_names(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            expected = wrappers.expected_wrapper_paths(Path(tmp))
+        self.assertIn(Path(tmp) / "Ilaas-codex", expected)
+        self.assertIn(Path(tmp) / "Ilaas-servers", expected)
+
 
 if __name__ == "__main__":
     unittest.main()

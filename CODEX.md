@@ -44,7 +44,9 @@ Install or refresh local configuration:
 
 ```bash
 python install.py --non-interactive --skip-litellm-install
+python install.py --force --codex-sandbox-mode workspace-write
 python -m ilaas_agents.cli refresh-models
+ilaas-agent --help
 ```
 
 Diagnostics:
@@ -182,29 +184,35 @@ Done:
 - Clean clone basic checks validated from `/tmp`.
 - Isolated path overrides added for test installs without touching the real HOME/config.
 - External agent dependency detection and opt-in npm installation added.
+- Configurable Codex sandbox mode added.
+- `--force` backs up generated files before overwrite.
+- Package entrypoint `ilaas-agent` added.
+- Proxy translation tests added for tool calls and tool results.
 
 Partial:
 
 - Multi-OS support: paths and wrappers are designed for Windows/macOS, but only Linux is validated.
 - Doctor: checks files, commands, ports, LiteLLM `/v1/models`, and proxy `/health`; it does not run token-consuming prompts by default.
 - Runtime wrappers: if a default port is already open, they verify `/v1/models` or `/health` before reusing it.
-- Installer: `--force` is accepted for idempotent reinstall workflows, but no destructive reset behavior is implemented.
+- Packaging: `ilaas-agent` can be installed as a Python console script, but generated wrappers still point at the source checkout through `PYTHONPATH`.
 
 Not done yet:
 
 - Full isolated install test against real ILaaS `/v1/models` without mocking network.
+- Full HTTP integration tests for proxy streaming and upstream error cases.
 - macOS validation.
 - Windows native validation.
 
 ## Recommended Next Implementation Steps
 
 1. Add full isolated install smoke using a real ILaaS key but fake HOME/config paths.
-2. Validate dependency installation on a clean Node/npm environment.
-3. Expand unit coverage for Windows wrapper generation.
-3. Decide whether `--force` should remain idempotent or perform explicit backup/overwrite flows.
-4. Validate macOS.
-5. Validate Windows via WSL2.
-6. Validate Windows native only after Codex/Claude/OpenCode are installed there.
+2. Add HTTP-level proxy integration tests for streaming, upstream errors, and unknown models.
+3. Validate dependency installation on a clean Node/npm environment.
+4. Expand unit coverage for Windows wrapper generation.
+5. Complete package-first installation so wrappers do not depend on keeping the clone path.
+6. Validate macOS.
+7. Validate Windows via WSL2.
+8. Validate Windows native only after Codex/Claude/OpenCode are installed there.
 
 ## Development Checks
 
@@ -214,6 +222,8 @@ Run before commit:
 python3 -m py_compile install.py ilaas_agents/*.py proxies/*.py
 bash -n Ilaas-codex Ilaas-claude Ilaas-opencode Ilaas-doctor Ilaas-servers install.sh
 python3 -m sphinx -b html -W --keep-going docs docs/_build/html
+python3 -m pip install .
+ilaas-agent --help
 Ilaas-doctor
 Ilaas-opencode run --model qwen-3.6-35b-instruct "Reply exactly: OK"
 python -m unittest discover -s tests
