@@ -14,6 +14,14 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 MODEL_PREFIX = "claude-ilaas-"
 DEFAULT_MODEL = "ilaas-default"
 MAX_OUTPUT_TOKENS = int(os.environ.get("ILAAS_CLAUDE_MAX_TOKENS", "4096"))
+SERVICE_NAME = "ilaas-claude-messages-proxy"
+
+
+class UpstreamHTTPError(Exception):
+    def __init__(self, code, body):
+        super().__init__(body)
+        self.code = code
+        self.body = body
 
 
 def strip_model_prefix(model):
@@ -207,7 +215,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         path = self.request_path()
         if path == "/health":
-            self.send_json(HTTPStatus.OK, {"ok": True})
+            self.send_json(HTTPStatus.OK, {"ok": True, "service": SERVICE_NAME})
             return
         if path == "/v1/models":
             self.send_json(HTTPStatus.OK, self.models_response())
@@ -231,6 +239,9 @@ class ProxyHandler(BaseHTTPRequestHandler):
             body = error.read().decode("utf-8", errors="replace")
             print(f"upstream HTTP {error.code}: {body[:2000]}", flush=True)
             self.send_json(error.code, {"error": {"type": "api_error", "message": body}})
+        except UpstreamHTTPError as error:
+            print(f"upstream HTTP {error.code}: {error.body[:2000]}", flush=True)
+            self.send_json(error.code, {"error": {"type": "api_error", "message": error.body}})
         except Exception as error:
             print(f"proxy error: {error}", flush=True)
             self.send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": {"type": "api_error", "message": str(error)}})
@@ -239,8 +250,12 @@ class ProxyHandler(BaseHTTPRequestHandler):
         data = None if payload is None else json.dumps(payload, ensure_ascii=False).encode("utf-8")
         headers = {"content-type": "application/json", "authorization": self.headers.get("authorization", "Bearer sk-local-dummy")}
         request = urllib.request.Request(self.upstream_base + path, data=data, headers=headers, method="GET" if payload is None else "POST")
-        with urllib.request.urlopen(request, timeout=180) as response:
-            return json.loads(response.read().decode("utf-8"))
+        try:
+            with urllib.request.urlopen(request, timeout=180) as response:
+                return json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as error:
+            body = error.read().decode("utf-8", errors="replace")
+            raise UpstreamHTTPError(error.code, body) from error
 
     def models_response(self):
         try:
@@ -285,7 +300,31 @@ class ProxyHandler(BaseHTTPRequestHandler):
                     json.dump(chat_payload, fh, ensure_ascii=False, indent=2)
             except Exception:
                 pass
-        return self.upstream_json("/chat/completions", chat_payload)
+        try:
+            return self.upstream_json("/chat/completions", chat_payload)
+        except UpstreamHTTPError as error:
+            if self.should_retry_qwen_tool_json_error(chat_payload, error.body):
+                retry_payload = dict(chat_payload)
+                retry_payload["messages"] = [
+                    {
+                        "role": "system",
+                        "content": (
+                            "When calling tools, function arguments must be a complete valid JSON object. "
+                            "Do not emit unterminated strings."
+                        ),
+                    },
+                    *chat_payload["messages"],
+                ]
+                return self.upstream_json("/chat/completions", retry_payload)
+            raise
+
+    def should_retry_qwen_tool_json_error(self, chat_payload, body):
+        model = str(chat_payload.get("model", ""))
+        return (
+            model.startswith("qwen-")
+            and bool(chat_payload.get("tools"))
+            and "Unterminated string" in body
+        )
 
     def write_anthropic_result(self, request_payload, chat_response):
         response_id = "msg_" + uuid.uuid4().hex

@@ -42,6 +42,21 @@ If a service was started outside this project, stop it manually.
 
 The wrappers verify the expected HTTP endpoint before reusing an open port. If another service is listening on `4000`, `4001`, or `4002`, the wrapper exits instead of silently using it. Use `LITELLM_PORT`, `RESPONSES_PORT`, or `CLAUDE_ILAAS_PORT` to choose alternate ports.
 
+If an old ILaaS proxy from another checkout is still running, `/health` may return HTTP 200 but without the expected `service` field. Current wrappers and `Ilaas-doctor` reject that stale proxy so it is not reused accidentally. Stop the old process, then rerun the agent wrapper.
+
+## Qwen returns `Unterminated string`
+
+The error can appear through LiteLLM as:
+
+```text
+OpenAIException - Unterminated string starting at ...
+Received Model Group=qwen-3.6-35b-instruct
+```
+
+Qwen can still work for normal chat and simple tool calls, but this failure can happen when the upstream tool-call JSON is malformed. The local Codex and Claude proxies retry Qwen tool-call requests once with a stricter instruction requiring complete JSON tool arguments.
+
+Also check for stale proxies on `4001` or `4002`; older proxies from temporary checkouts can keep listening and route requests through outdated code.
+
 ## Missing ILaaS key
 
 Set the key during install:

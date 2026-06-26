@@ -54,15 +54,19 @@ def litellm_bin() -> str:
     raise SystemExit("litellm not found. Run python install.py or set LITELLM_BIN.")
 
 
-def http_json_ok(url: str, timeout: float = 2.0) -> bool:
+def http_json(url: str, timeout: float = 2.0) -> dict | None:
     try:
         with urllib.request.urlopen(url, timeout=timeout) as response:
             if response.status >= 400:
-                return False
-            json.loads(response.read().decode("utf-8"))
-            return True
+                return None
+            payload = json.loads(response.read().decode("utf-8"))
+            return payload if isinstance(payload, dict) else None
     except Exception:
-        return False
+        return None
+
+
+def http_json_ok(url: str, timeout: float = 2.0) -> bool:
+    return http_json(url, timeout) is not None
 
 
 def wait_for_http_json(name: str, url: str, attempts: int = 80) -> None:
@@ -73,11 +77,13 @@ def wait_for_http_json(name: str, url: str, attempts: int = 80) -> None:
     raise SystemExit(f"timed out waiting for {name} at {url}")
 
 
-def require_existing_http_service(name: str, url: str, port_hint: str) -> None:
-    if http_json_ok(url):
+def require_existing_http_service(name: str, url: str, port_hint: str, expected_service: str | None = None) -> None:
+    payload = http_json(url)
+    if payload is not None and (expected_service is None or payload.get("service") == expected_service):
         return
+    expected = f" with service={expected_service}" if expected_service else ""
     raise SystemExit(
-        f"{name} port is open but the expected ILaaS service did not answer at {url}. "
+        f"{name} port is open but the expected ILaaS service{expected} did not answer at {url}. "
         f"Stop the conflicting service or use {port_hint} to choose another port."
     )
 
@@ -106,7 +112,7 @@ def ensure_litellm(manager: ProcessManager, cfg: RuntimeConfig, persistent: bool
 def ensure_codex_proxy(manager: ProcessManager, cfg: RuntimeConfig, persistent: bool = False) -> None:
     health_url = f"http://{cfg.responses_host}:{cfg.responses_port}/health"
     if manager.port_open(cfg.responses_host, cfg.responses_port):
-        require_existing_http_service("Codex Responses proxy", health_url, "RESPONSES_PORT")
+        require_existing_http_service("Codex Responses proxy", health_url, "RESPONSES_PORT", "ilaas-codex-responses-proxy")
         print(f"ILaaS: Codex Responses proxy already listening on {cfg.responses_host}:{cfg.responses_port}", file=sys.stderr)
         return
     proxy = paths.repo_root() / "proxies" / "codex_ilaas_responses_proxy.py"
@@ -134,7 +140,7 @@ def ensure_codex_proxy(manager: ProcessManager, cfg: RuntimeConfig, persistent: 
 def ensure_claude_proxy(manager: ProcessManager, cfg: RuntimeConfig, persistent: bool = False) -> None:
     health_url = f"http://{cfg.claude_host}:{cfg.claude_port}/health"
     if manager.port_open(cfg.claude_host, cfg.claude_port):
-        require_existing_http_service("Claude Messages proxy", health_url, "CLAUDE_ILAAS_PORT")
+        require_existing_http_service("Claude Messages proxy", health_url, "CLAUDE_ILAAS_PORT", "ilaas-claude-messages-proxy")
         print(f"ILaaS: Claude Messages proxy already listening on {cfg.claude_host}:{cfg.claude_port}", file=sys.stderr)
         return
     proxy = paths.repo_root() / "proxies" / "claude_ilaas_messages_proxy.py"

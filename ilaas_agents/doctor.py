@@ -3,6 +3,7 @@ from __future__ import annotations
 import shutil
 import socket
 import subprocess
+import json
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -32,12 +33,22 @@ def exists(label: str, path: Path) -> tuple[str, bool, str]:
     return (label, path.exists(), str(path))
 
 
-def http_json_ok(label: str, url: str) -> tuple[str, bool, str]:
+def http_json_ok(label: str, url: str, expected_service: str | None = None) -> tuple[str, bool, str]:
     try:
         request = urllib.request.Request(url, headers={"authorization": "Bearer sk-local-dummy"})
         with urllib.request.urlopen(request, timeout=5) as response:
-            response.read()
-            return (label, 200 <= response.status < 300, f"{response.status} {url}")
+            body = response.read().decode("utf-8", errors="replace")
+            ok = 200 <= response.status < 300
+            if expected_service:
+                try:
+                    payload = json.loads(body)
+                except json.JSONDecodeError:
+                    payload = {}
+                ok = ok and payload.get("service") == expected_service
+                detail = f"{response.status} {url} service={payload.get('service')}"
+            else:
+                detail = f"{response.status} {url}"
+            return (label, ok, detail)
     except urllib.error.HTTPError as error:
         return (label, False, f"{error.code} {url}")
     except Exception as error:
@@ -62,9 +73,9 @@ def run() -> int:
     if port_open("127.0.0.1", 4000):
         checks.append(http_json_ok("LiteLLM /v1/models", "http://127.0.0.1:4000/v1/models"))
     if port_open("127.0.0.1", 4001):
-        checks.append(http_json_ok("Codex proxy /health", "http://127.0.0.1:4001/health"))
+        checks.append(http_json_ok("Codex proxy /health", "http://127.0.0.1:4001/health", "ilaas-codex-responses-proxy"))
     if port_open("127.0.0.1", 4002):
-        checks.append(http_json_ok("Claude proxy /health", "http://127.0.0.1:4002/health"))
+        checks.append(http_json_ok("Claude proxy /health", "http://127.0.0.1:4002/health", "ilaas-claude-messages-proxy"))
 
     failed = 0
     for label, ok, detail in checks:

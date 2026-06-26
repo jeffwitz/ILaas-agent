@@ -9,6 +9,16 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
+SERVICE_NAME = "ilaas-codex-responses-proxy"
+
+
+class UpstreamHTTPError(Exception):
+    def __init__(self, code, body):
+        super().__init__(body)
+        self.code = code
+        self.body = body
+
+
 def text_from_content(content):
     if isinstance(content, str):
         return content
@@ -165,7 +175,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/health":
-            self.send_json(HTTPStatus.OK, {"ok": True})
+            self.send_json(HTTPStatus.OK, {"ok": True, "service": SERVICE_NAME})
             return
         self.send_json(HTTPStatus.NOT_FOUND, {"error": "not found"})
 
@@ -182,6 +192,8 @@ class ProxyHandler(BaseHTTPRequestHandler):
         except urllib.error.HTTPError as error:
             body = error.read().decode("utf-8", errors="replace")
             self.send_json(error.code, {"error": body})
+        except UpstreamHTTPError as error:
+            self.send_json(error.code, {"error": error.body})
         except Exception as error:
             self.send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(error)})
 
@@ -211,14 +223,45 @@ class ProxyHandler(BaseHTTPRequestHandler):
             "content-type": "application/json",
             "authorization": self.headers.get("authorization", "Bearer sk-local-dummy"),
         }
+        try:
+            return self.post_chat_completion(chat_payload, headers)
+        except UpstreamHTTPError as error:
+            if self.should_retry_qwen_tool_json_error(chat_payload, error.body):
+                retry_payload = dict(chat_payload)
+                retry_payload["messages"] = [
+                    {
+                        "role": "system",
+                        "content": (
+                            "When calling tools, function arguments must be a complete valid JSON object. "
+                            "Do not emit unterminated strings."
+                        ),
+                    },
+                    *chat_payload["messages"],
+                ]
+                return self.post_chat_completion(retry_payload, headers)
+            raise
+
+    def post_chat_completion(self, chat_payload, headers):
         request = urllib.request.Request(
             self.upstream_base + "/chat/completions",
             data=json.dumps(chat_payload, ensure_ascii=False).encode("utf-8"),
             headers=headers,
             method="POST",
         )
-        with urllib.request.urlopen(request, timeout=180) as response:
-            return json.loads(response.read().decode("utf-8"))
+        try:
+            with urllib.request.urlopen(request, timeout=180) as response:
+                return json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as error:
+            body = error.read().decode("utf-8", errors="replace")
+            raise UpstreamHTTPError(error.code, body) from error
+
+    def should_retry_qwen_tool_json_error(self, chat_payload, body):
+        model = str(chat_payload.get("model", ""))
+        return (
+            model.startswith("qwen-")
+            and bool(chat_payload.get("tools"))
+            and "Unterminated string" in body
+        )
 
     def write_chunked(self, chunk):
         self.wfile.write(f"{len(chunk):X}\r\n".encode("ascii"))

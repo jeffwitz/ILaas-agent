@@ -55,10 +55,22 @@ Claude proxy 127.0.0.1:4002
 If a port is already open, ILaaS Agent verifies the expected HTTP endpoint before reusing it:
 
 - LiteLLM: `/v1/models`
-- Codex proxy: `/health`
-- Claude proxy: `/health`
+- Codex proxy: `/health` with `service=ilaas-codex-responses-proxy`
+- Claude proxy: `/health` with `service=ilaas-claude-messages-proxy`
 
 If another service owns the port, stop that service or set `LITELLM_PORT`, `RESPONSES_PORT`, or `CLAUDE_ILAAS_PORT`.
+
+Older ILaaS proxies that only return `{"ok": true}` are treated as stale and are not reused.
+
+## Qwen Tool JSON Retry
+
+`qwen-3.6-35b-instruct` can occasionally trigger a LiteLLM/OpenAI-compatible error when a generated tool-call argument string is malformed:
+
+```text
+Unterminated string starting at ...
+```
+
+For Qwen requests with tools, the Codex and Claude proxies retry once with an extra instruction requiring complete valid JSON tool arguments. If the retry also fails, the upstream error is returned.
 
 ## Codex Sandbox
 

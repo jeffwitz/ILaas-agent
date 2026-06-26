@@ -80,6 +80,23 @@ class ProxyTranslationTest(unittest.TestCase):
         self.assertEqual(recorder.payload["output"][0]["call_id"], "call_1")
         self.assertEqual(recorder.payload["usage"]["total_tokens"], 13)
 
+    def test_codex_qwen_tool_json_error_is_retryable(self):
+        payload = {"model": "qwen-3.6-35b-instruct", "tools": [{"type": "function"}]}
+        self.assertTrue(
+            codex_proxy.ProxyHandler.should_retry_qwen_tool_json_error(
+                None,
+                payload,
+                "OpenAIException - Unterminated string starting at: line 1 column 9",
+            )
+        )
+        self.assertFalse(
+            codex_proxy.ProxyHandler.should_retry_qwen_tool_json_error(
+                None,
+                {"model": "mistral-medium-latest", "tools": [{"type": "function"}]},
+                "OpenAIException - Unterminated string starting at: line 1 column 9",
+            )
+        )
+
     def test_claude_request_tool_result_round_trip_to_chat_messages(self):
         payload = {
             "model": "claude-ilaas-qwen-3.6-35b-instruct",
@@ -154,6 +171,16 @@ class ProxyTranslationTest(unittest.TestCase):
         self.assertEqual(recorder.payload["stop_reason"], "tool_use")
         self.assertEqual(recorder.payload["content"][0]["type"], "tool_use")
         self.assertEqual(recorder.payload["content"][0]["input"], {"path": "README.md"})
+
+    def test_claude_qwen_tool_json_error_is_retryable(self):
+        payload = {"model": "qwen-3.6-35b-instruct", "tools": [{"type": "function"}]}
+        self.assertTrue(
+            claude_proxy.ProxyHandler.should_retry_qwen_tool_json_error(
+                None,
+                payload,
+                "OpenAIException - Unterminated string starting at: line 1 column 9",
+            )
+        )
 
 
 if __name__ == "__main__":

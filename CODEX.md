@@ -194,6 +194,8 @@ Partial:
 - Multi-OS support: paths and wrappers are designed for Windows/macOS, but only Linux is validated.
 - Doctor: checks files, commands, ports, LiteLLM `/v1/models`, and proxy `/health`; it does not run token-consuming prompts by default.
 - Runtime wrappers: if a default port is already open, they verify `/v1/models` or `/health` before reusing it.
+- Proxy `/health` responses include a `service` field; wrappers and doctor reject older proxies that only return `{"ok": true}`.
+- Qwen tool-call requests are retried once when LiteLLM reports the upstream `Unterminated string` JSON error.
 - Packaging: `ilaas-agent` can be installed as a Python console script, but generated wrappers still point at the source checkout through `PYTHONPATH`.
 
 Not done yet:

@@ -30,7 +30,7 @@ class RunnersTest(unittest.TestCase):
     def test_existing_codex_proxy_port_must_match_health_endpoint(self):
         manager = mock.Mock()
         manager.port_open.return_value = True
-        with mock.patch("ilaas_agents.runners.http_json_ok", return_value=False):
+        with mock.patch("ilaas_agents.runners.http_json", return_value=None):
             with self.assertRaises(SystemExit) as context:
                 runners.ensure_codex_proxy(manager, runners.RuntimeConfig())
         self.assertIn("expected ILaaS service", str(context.exception))
@@ -38,9 +38,17 @@ class RunnersTest(unittest.TestCase):
     def test_existing_codex_proxy_port_is_reused_when_health_matches(self):
         manager = mock.Mock()
         manager.port_open.return_value = True
-        with mock.patch("ilaas_agents.runners.http_json_ok", return_value=True):
+        with mock.patch("ilaas_agents.runners.http_json", return_value={"ok": True, "service": "ilaas-codex-responses-proxy"}):
             runners.ensure_codex_proxy(manager, runners.RuntimeConfig())
         manager.start.assert_not_called()
+
+    def test_existing_legacy_proxy_health_is_rejected(self):
+        manager = mock.Mock()
+        manager.port_open.return_value = True
+        with mock.patch("ilaas_agents.runners.http_json", return_value={"ok": True}):
+            with self.assertRaises(SystemExit) as context:
+                runners.ensure_codex_proxy(manager, runners.RuntimeConfig())
+        self.assertIn("service=ilaas-codex-responses-proxy", str(context.exception))
 
 
 if __name__ == "__main__":
