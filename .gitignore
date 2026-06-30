@@ -2,6 +2,13 @@ __pycache__/
 *.py[cod]
 *.log
 .env
+
+# Editor swap/backup files
+*.swp
+*.swo
+*~
+.kate-swp
+*.kate-swp
 .venv/
 .pytest_cache/
 .mypy_cache/
