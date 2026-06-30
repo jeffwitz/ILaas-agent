@@ -35,7 +35,7 @@ class OpenRouterTest(unittest.TestCase):
     def test_default_models_use_openrouter_aliases(self):
         with mock.patch.dict(os.environ, {}, clear=True):
             self.assertEqual(openrouter.codex_model(), "~openai/gpt-latest")
-            self.assertEqual(openrouter.claude_model(), "~anthropic/claude-sonnet-latest")
+            self.assertEqual(openrouter.claude_model(), "z-ai/glm-5.2")
             self.assertEqual(openrouter.opencode_model(), "~openai/gpt-latest")
 
     def test_run_codex_uses_direct_responses_provider(self):
@@ -110,9 +110,9 @@ class OpenRouterTest(unittest.TestCase):
         self.assertEqual(env["ANTHROPIC_BASE_URL"], "http://127.0.0.1:4568")
         self.assertEqual(env["ANTHROPIC_AUTH_TOKEN"], "sk-or-secret")
         self.assertEqual(env["ANTHROPIC_API_KEY"], "")
-        self.assertEqual(env["ANTHROPIC_MODEL"], "~anthropic/claude-sonnet-latest")
+        self.assertEqual(env["ANTHROPIC_MODEL"], "z-ai/glm-5.2")
         self.assertEqual(env["CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY"], "1")
-        self.assertEqual(env["ANTHROPIC_DEFAULT_SONNET_MODEL"], "~anthropic/claude-sonnet-latest")
+        self.assertEqual(env["ANTHROPIC_DEFAULT_SONNET_MODEL"], "z-ai/glm-5.2")
         self.assertNotIn("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", env)
         manager.cleanup.assert_called_once_with()
 

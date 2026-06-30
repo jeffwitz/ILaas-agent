@@ -15,7 +15,7 @@ from .processes import ProcessManager, python_executable
 
 
 DEFAULT_CODEX_MODEL = "~openai/gpt-latest"
-DEFAULT_CLAUDE_MODEL = "~anthropic/claude-sonnet-latest"
+DEFAULT_CLAUDE_MODEL = "z-ai/glm-5.2"
 DEFAULT_OPENCODE_MODEL = "~openai/gpt-latest"
 DEFAULT_OPENAI_BASE_URL = "https://openrouter.ai/api/v1"
 DEFAULT_ANTHROPIC_BASE_URL = "https://openrouter.ai/api"
@@ -234,11 +234,14 @@ def run_claude(argv: list[str]) -> int:
         env["API_TIMEOUT_MS"] = env.get("API_TIMEOUT_MS", "3000000")
         env["CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY"] = "1"
         env.pop("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", None)
-        env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = "~anthropic/claude-opus-latest"
-        env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = "~anthropic/claude-sonnet-latest"
-        env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = "~anthropic/claude-haiku-latest"
-        env["ANTHROPIC_DEFAULT_FABLE_MODEL"] = "~anthropic/claude-fable-latest"
-        env["CLAUDE_CODE_SUBAGENT_MODEL"] = model
+        for variable in (
+            "ANTHROPIC_DEFAULT_OPUS_MODEL",
+            "ANTHROPIC_DEFAULT_SONNET_MODEL",
+            "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+            "ANTHROPIC_DEFAULT_FABLE_MODEL",
+        ):
+            env[variable] = model
+        env["CLAUDE_CONFIG_DIR"] = os.path.expanduser("~/.claude_openrouter")
         env["ANTHROPIC_CUSTOM_MODEL_OPTION"] = model
         env["ANTHROPIC_CUSTOM_MODEL_OPTION_NAME"] = f"OpenRouter {model}"
         env["ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION"] = "Anthropic model through OpenRouter"
