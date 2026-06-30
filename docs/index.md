@@ -108,6 +108,7 @@ openrouter
 interfaces
 compatibility
 dependencies
+tiers
 models
 codex
 claude-code

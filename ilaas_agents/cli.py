@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from . import deps, doctor, glm52, models, openrouter, paths, runners, smoke
+from . import deps, doctor, glm52, models, openrouter, paths, runners, smoke, tiers
 from .install import main as install_main
 
 
@@ -74,6 +74,11 @@ def main() -> None:
 
     smoke.add_parser(sub)
 
+    tiers_parser = sub.add_parser("tiers", help="Manage tier-to-model mappings per provider.")
+    tiers_parser.add_argument("action", choices=["list", "suggest", "apply"])
+    tiers_parser.add_argument("--provider", choices=["ilaas", "glm52", "openrouter"], required=True)
+    tiers_parser.add_argument("--tier", action="append", metavar="tier=slug")
+
     args = parser.parse_args()
 
     if args.command == "install":
@@ -92,6 +97,36 @@ def main() -> None:
         raise SystemExit(0)
     elif args.command == "smoke":
         raise SystemExit(smoke.run(args))
+    elif args.command == "tiers":
+        if args.action == "list":
+            for tier in tiers.TIERS:
+                resolved = tiers.resolve(args.provider, tier)
+                print(f"{args.provider} {tier}: {resolved or '(unset)'}")
+            print(f"catalog: {tiers.catalog_path(args.provider)}")
+            raise SystemExit(0)
+        if args.action == "suggest":
+            mapping = tiers.suggest(args.provider)
+            for tier in tiers.TIERS:
+                print(f"{args.provider} {tier}: {mapping.get(tier, '(none)')}")
+            raise SystemExit(0)
+        # action == "apply"
+        if args.tier:
+            mapping = {}
+            for entry in args.tier:
+                if "=" not in entry:
+                    raise SystemExit(f"Invalid --tier format '{entry}': expected tier=slug (e.g. --tier supervisor=qwen-3.6-35b-instruct)")
+                key, _, val = entry.partition("=")
+                key, val = key.strip(), val.strip()
+                if not key or not val:
+                    raise SystemExit(f"Invalid --tier format '{entry}': both tier and slug must be non-empty")
+                if key not in tiers.TIERS:
+                    raise SystemExit(f"Unknown tier '{key}'; expected one of: {', '.join(tiers.TIERS)}")
+                mapping[key] = val
+        else:
+            mapping = None
+        counts = tiers.apply(args.provider, mapping)
+        print(f"Applied tiers to {args.provider} catalog: {counts}")
+        raise SystemExit(0)
     else:
         parser.error("unknown command")
 

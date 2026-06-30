@@ -25,6 +25,17 @@ class ModelsTest(unittest.TestCase):
         llama = next(item for item in payload["models"] if item["slug"] == "llama-3.1-8b")
         self.assertIn("Not recommended", llama["description"])
 
+    def test_codex_catalog_entry_has_tier_field(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "catalog.json"
+            models.write_codex_catalog(
+                path, ["qwen-3.6-35b-instruct", "llama-3.1-8b-instruct"]
+            )
+            payload = json.loads(path.read_text())
+        for item in payload["models"]:
+            self.assertIn("tier", item)
+            self.assertIn(item["tier"], {"supervisor", "coder", "small"})
+
 
 if __name__ == "__main__":
     unittest.main()

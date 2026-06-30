@@ -5,6 +5,8 @@ import re
 import urllib.request
 from pathlib import Path
 
+from . import tiers
+
 
 DEFAULT_API_BASE = "https://llm.ilaas.fr/v1"
 DEFAULT_ALIAS = "ilaas-default"
@@ -45,6 +47,11 @@ MODEL_TEMPLATE = {
     "input_modalities": ["text"],
     "supports_search_tool": False,
     "use_responses_lite": False,
+    # Tier classification (supervisor | coder | small). Populated by
+    # write_codex_catalog via tiers.assign_tier; consumed by tiers.resolve so
+    # the launcher families can pick a concrete model per tier instead of a
+    # single hardcoded default. See ilaas_agents/tiers.py.
+    "tier": None,
 }
 
 
@@ -129,6 +136,7 @@ def write_codex_catalog(path: Path, model_ids: list[str]) -> None:
         model["base_instructions"] = MODEL_TEMPLATE["base_instructions"] + "\n\n" + model_identity_instruction(alias, target)
         if alias.startswith("llama-3.1-") or alias.startswith("llama-3.3-"):
             model["description"] += " Not recommended for code-agent tool use."
+        model["tier"] = tiers.assign_tier("ilaas", alias)
         models.append(model)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps({"models": models}, indent=2) + "\n")

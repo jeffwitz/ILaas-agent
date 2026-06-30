@@ -7,6 +7,7 @@ import subprocess
 from pathlib import Path
 
 from . import paths
+from . import tiers
 from .models import MODEL_TEMPLATE
 from .processes import ProcessManager, python_executable
 
@@ -48,7 +49,7 @@ def anthropic_base_url() -> str:
 
 
 def opencode_config_content() -> str:
-    model = model_name()
+    model = tiers.resolve("glm52", "supervisor") or model_name()
     config = {
         "$schema": "https://opencode.ai/config.json",
         "model": f"{PROVIDER_ID}/{model}",
@@ -98,6 +99,7 @@ def codex_catalog_path(destination: Path | None = None) -> Path:
             "max_context_window": 200000,
         }
     )
+    model["tier"] = tiers.assign_tier("glm52", model_name())
     content = json.dumps({"models": [model]}, indent=2) + "\n"
     destination.parent.mkdir(parents=True, exist_ok=True)
     if not destination.exists() or destination.read_text(encoding="utf-8") != content:
@@ -125,8 +127,12 @@ def start_codex_proxy(manager: ProcessManager, host: str, port: int) -> None:
 
 
 def run_codex(argv: list[str]) -> int:
+    if argv == ["--list-models"]:
+        print(model_name())
+        return 0
+
     key = api_key()
-    model = model_name()
+    model = tiers.resolve("glm52", "supervisor") or model_name()
     host = "127.0.0.1"
     port = available_port(host)
     manager = ProcessManager()
@@ -165,6 +171,9 @@ def run_claude(argv: list[str]) -> int:
 
     key = api_key()
     model = model_name()
+    supervisor = tiers.resolve("glm52", "supervisor") or model
+    coder = tiers.resolve("glm52", "coder") or supervisor
+    small = tiers.resolve("glm52", "small") or supervisor
     env = os.environ.copy()
     env.pop("ANTHROPIC_API_KEY", None)
     env["ANTHROPIC_AUTH_TOKEN"] = key
@@ -173,17 +182,38 @@ def run_claude(argv: list[str]) -> int:
     env["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"] = env.get(
         "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "1"
     )
-    for variable in (
-        "ANTHROPIC_DEFAULT_OPUS_MODEL",
-        "ANTHROPIC_DEFAULT_SONNET_MODEL",
-        "ANTHROPIC_DEFAULT_HAIKU_MODEL",
-        "ANTHROPIC_DEFAULT_FABLE_MODEL",
-    ):
-        env[variable] = model
+    env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = supervisor
+    env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = coder
+    env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = small
+    env["ANTHROPIC_DEFAULT_FABLE_MODEL"] = supervisor
     env["ANTHROPIC_CUSTOM_MODEL_OPTION"] = model
     env["ANTHROPIC_CUSTOM_MODEL_OPTION_NAME"] = "GLM 5.2"
     env["ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION"] = "GLM 5.2 through Z.AI"
     return subprocess.call(["claude", *argv], env=env)
+
+
+def opencode_model_name(model: str) -> str:
+    if model.startswith(f"{PROVIDER_ID}/"):
+        return model
+    return f"{PROVIDER_ID}/{model}"
+
+
+def rewrite_opencode_model_args(argv: list[str]) -> list[str]:
+    rewritten: list[str] = []
+    rewrite_next = False
+    for arg in argv:
+        if rewrite_next:
+            rewritten.append(opencode_model_name(arg))
+            rewrite_next = False
+            continue
+        if arg in {"-m", "--model"}:
+            rewritten.append(arg)
+            rewrite_next = True
+        elif arg.startswith("--model="):
+            rewritten.append(f"--model={opencode_model_name(arg.split('=', 1)[1])}")
+        else:
+            rewritten.append(arg)
+    return rewritten
 
 
 def run_opencode(argv: list[str]) -> int:
@@ -194,4 +224,4 @@ def run_opencode(argv: list[str]) -> int:
     env = os.environ.copy()
     env["GLM52_API_KEY"] = api_key()
     env["OPENCODE_CONFIG_CONTENT"] = opencode_config_content()
-    return subprocess.call(["opencode", *argv], env=env)
+    return subprocess.call(["opencode", *rewrite_opencode_model_args(argv)], env=env)

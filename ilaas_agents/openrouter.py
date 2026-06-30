@@ -10,6 +10,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 from . import paths
+from . import tiers
 from .models import MODEL_TEMPLATE
 from .processes import ProcessManager, python_executable
 
@@ -82,15 +83,15 @@ def start_claude_proxy(manager: ProcessManager, host: str, port: int) -> None:
 
 
 def codex_model() -> str:
-    return os.environ.get("OPENROUTER_CODEX_MODEL", os.environ.get("OPENROUTER_MODEL", DEFAULT_CODEX_MODEL))
+    return tiers.resolve("openrouter", "supervisor") or os.environ.get("OPENROUTER_CODEX_MODEL", os.environ.get("OPENROUTER_MODEL", DEFAULT_CODEX_MODEL))
 
 
 def claude_model() -> str:
-    return os.environ.get("OPENROUTER_CLAUDE_MODEL", DEFAULT_CLAUDE_MODEL)
+    return os.environ.get("OPENROUTER_CLAUDE_MODEL", None) or tiers.resolve("openrouter", "supervisor") or DEFAULT_CLAUDE_MODEL
 
 
 def opencode_model() -> str:
-    return os.environ.get("OPENROUTER_OPENCODE_MODEL", os.environ.get("OPENROUTER_MODEL", DEFAULT_OPENCODE_MODEL))
+    return tiers.resolve("openrouter", "supervisor") or os.environ.get("OPENROUTER_OPENCODE_MODEL", os.environ.get("OPENROUTER_MODEL", DEFAULT_OPENCODE_MODEL))
 
 
 def fetch_models() -> list[dict]:
@@ -148,6 +149,7 @@ def codex_model_entry(metadata: dict) -> dict:
             "context_window": context_window,
             "max_context_window": context_window,
             "input_modalities": [item for item in input_modalities if item in {"text", "image"}],
+            "tier": tiers.assign_tier("openrouter", model_id, metadata),
         }
     )
     return model

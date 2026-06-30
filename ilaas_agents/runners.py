@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from . import paths
+from . import tiers
 from .processes import ProcessManager, pid_file, python_executable, read_pid, terminate_pid
 
 
@@ -182,6 +183,9 @@ def list_models(claude: bool = False) -> None:
 
 
 def run_codex(argv: list[str]) -> int:
+    if argv == ["--list-models"]:
+        list_models(claude=False)
+        return 0
     cfg = RuntimeConfig.from_env()
     manager = ProcessManager()
     keep = os.environ.get("ILAAS_CODEX_KEEP_SERVERS", os.environ.get("MISTRAL_CODEX_KEEP_SERVERS", "0")) == "1"
@@ -241,14 +245,17 @@ def run_claude(argv: list[str]) -> int:
                 f"ILaaS: warning: {selected.removeprefix(MODEL_PREFIX)} is not recommended for Claude Code tools.",
                 file=sys.stderr,
             )
+        supervisor = tiers.resolve("ilaas", "supervisor") or DEFAULT_CLAUDE_MODEL
+        coder = tiers.resolve("ilaas", "coder") or supervisor
+        small = tiers.resolve("ilaas", "small") or supervisor
         env = os.environ.copy()
         env["ANTHROPIC_BASE_URL"] = f"http://{cfg.claude_host}:{cfg.claude_port}"
         env["ANTHROPIC_API_KEY"] = env.get("ANTHROPIC_API_KEY", "sk-local-dummy")
         env["CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY"] = env.get("CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY", "1")
-        env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = env.get("ANTHROPIC_DEFAULT_OPUS_MODEL", DEFAULT_CLAUDE_MODEL)
-        env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = env.get("ANTHROPIC_DEFAULT_SONNET_MODEL", DEFAULT_CLAUDE_MODEL)
-        env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = env.get("ANTHROPIC_DEFAULT_HAIKU_MODEL", DEFAULT_CLAUDE_MODEL)
-        env["ANTHROPIC_DEFAULT_FABLE_MODEL"] = env.get("ANTHROPIC_DEFAULT_FABLE_MODEL", DEFAULT_CLAUDE_MODEL)
+        env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = env.get("ANTHROPIC_DEFAULT_OPUS_MODEL", supervisor)
+        env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = env.get("ANTHROPIC_DEFAULT_SONNET_MODEL", coder)
+        env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = env.get("ANTHROPIC_DEFAULT_HAIKU_MODEL", small)
+        env["ANTHROPIC_DEFAULT_FABLE_MODEL"] = env.get("ANTHROPIC_DEFAULT_FABLE_MODEL", supervisor)
         env["MAX_THINKING_TOKENS"] = env.get("MAX_THINKING_TOKENS", "0")
         env["ANTHROPIC_CUSTOM_MODEL_OPTION"] = env.get("ANTHROPIC_CUSTOM_MODEL_OPTION", selected)
         env["ANTHROPIC_CUSTOM_MODEL_OPTION_NAME"] = env.get("ANTHROPIC_CUSTOM_MODEL_OPTION_NAME", f"ILaaS {selected.removeprefix(MODEL_PREFIX)}")
@@ -276,10 +283,12 @@ def opencode_config_content(cfg: RuntimeConfig) -> str:
             },
         }
     default_model = os.environ.get("ILAAS_OPENCODE_MODEL", DEFAULT_OPENCODE_MODEL)
+    supervisor = tiers.resolve("ilaas", "supervisor") or default_model
+    small = tiers.resolve("ilaas", "small") or supervisor
     config = {
         "$schema": "https://opencode.ai/config.json",
-        "model": f"{PROVIDER_ID}/{default_model}",
-        "small_model": f"{PROVIDER_ID}/{default_model}",
+        "model": f"{PROVIDER_ID}/{supervisor}",
+        "small_model": f"{PROVIDER_ID}/{small}",
         "provider": {
             PROVIDER_ID: {
                 "npm": "@ai-sdk/openai-compatible",
@@ -327,7 +336,7 @@ def run_opencode(argv: list[str]) -> int:
         return 0
     cfg = RuntimeConfig.from_env()
     manager = ProcessManager()
-    keep = os.environ.get("ILAAS_OPENCODE_KEEP_SERVER", "0") == "1"
+    keep = os.environ.get("ILAAS_OPENCODE_KEEP_SERVERS", "0") == "1"
     try:
         ensure_litellm(manager, cfg)
         env = os.environ.copy()

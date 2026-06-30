@@ -47,6 +47,8 @@ MODEL_TEMPLATE = {
     "input_modalities": ["text"],
     "supports_search_tool": False,
     "use_responses_lite": False,
+    # Tier classification (supervisor | coder | small). Populated below.
+    "tier": None,
 }
 
 
@@ -115,6 +117,19 @@ def display_name(slug):
     return slug.replace("-", " ").replace(".", ".").title()
 
 
+def assign_tier(slug):
+    name = (slug or "").lower()
+    if not name:
+        return "coder"
+    if name in {"ilaas-default", "mistral-ilaas"}:
+        return "supervisor"
+    if re.search(r"(70b|405b|medium|max|large)", name) or "3.6-35b" in name:
+        return "supervisor"
+    if re.search(r"(\b8b\b|\b3b\b|\b1b\b|mini|tiny|small)", name):
+        return "small"
+    return "coder"
+
+
 def model_identity_instruction(alias, target):
     return (
         f"Selected ILaaS model slug: {alias}. Upstream ILaaS model: {target}. "
@@ -131,6 +146,7 @@ def write_codex_catalog(path, model_ids):
         model["display_name"] = display_name(alias)
         model["description"] = f"{alias} routed to {target} through the local LiteLLM Responses proxy."
         model["base_instructions"] = MODEL_TEMPLATE["base_instructions"] + "\n\n" + model_identity_instruction(alias, target)
+        model["tier"] = assign_tier(alias)
         models.append(model)
 
     path.parent.mkdir(parents=True, exist_ok=True)

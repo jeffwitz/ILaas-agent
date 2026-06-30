@@ -36,3 +36,7 @@ llama-3.3-70b
 ```
 
 They may be usable for simple chat, but current tool-calling behavior is not reliable enough for agentic code editing.
+
+## Model tiers
+
+Each catalog entry carries a `tier` field (`supervisor` / `coder` / `small`) that lets launchers pick the most capable model for supervision and the most efficient for code, per provider. See {doc}`tiers` for the resolve precedence, CLI management, and heuristics.
