@@ -14,6 +14,12 @@ Ilaas-claude
 Ilaas-opencode
 Ilaas-doctor
 Ilaas-servers
+glm52-codex
+glm52-claude
+glm52-opencode
+openrouter-codex
+openrouter-claude
+openrouter-opencode
 ```
 
 They let you use the same ILaaS model catalog from three code-agent tools:
@@ -23,6 +29,8 @@ They let you use the same ILaaS model catalog from three code-agent tools:
 | Codex CLI | `Ilaas-codex` | OpenAI Responses-compatible proxy |
 | Claude Code | `Ilaas-claude` | Anthropic Messages-compatible proxy |
 | OpenCode | `Ilaas-opencode` | OpenAI-compatible provider via LiteLLM |
+
+The `glm52-*` commands use the GLM 5.2 API directly, independently of the ILaaS gateway.
 
 ## Quick Start
 
@@ -49,6 +57,11 @@ Run the fastest practical smoke test:
 ```bash
 Ilaas-opencode run --model qwen-3.6-35b-instruct "Reply exactly: OK"
 ```
+
+Detailed provider setup:
+
+- [Configure ILaaS](docs/ilaas.md)
+- [Configure OpenRouter](docs/openrouter.md)
 
 ## Important Security Note
 
@@ -86,6 +99,78 @@ List available models:
 Ilaas-opencode --list-models
 Ilaas-claude --list-models
 ```
+
+## GLM 5.2 Direct API
+
+Put the Z.AI token alone on one line in `GLM5.2.md` at the repository root, or export it without a file:
+
+```bash
+export GLM52_API_KEY="your_zai_key"
+```
+
+The token file is ignored by Git and read only when a `glm52-*` command starts. Run the three agents with:
+
+```bash
+glm52-codex exec --skip-git-repo-check "Reply exactly: OK"
+glm52-claude -p "Reply exactly: OK"
+glm52-opencode run "Reply exactly: OK"
+```
+
+All launchers default to the API model `glm-5.2`. Optional overrides are available for another account or endpoint:
+
+```bash
+export GLM52_MODEL="glm-5.2"
+export GLM52_TOKEN_FILE="/path/to/token-file"
+export GLM52_OPENAI_BASE_URL="https://api.z.ai/api/paas/v4"
+export GLM52_ANTHROPIC_BASE_URL="https://api.z.ai/api/anthropic"
+```
+
+Codex uses the repository's local Responses-to-Chat-Completions adapter because Codex speaks the Responses API. Claude Code uses Z.AI's Anthropic-compatible endpoint, and OpenCode uses its OpenAI-compatible endpoint directly.
+
+## OpenRouter Direct API
+
+Put the OpenRouter key alone on one line in `OPENROUTER.md` or `OPEN_ROUTER.md`, or export it:
+
+```bash
+export OPENROUTER_API_KEY="sk-or-..."
+```
+
+The key files are ignored by Git. The launchers use OpenRouter's native integrations directly:
+
+```bash
+openrouter-codex exec --skip-git-repo-check "Reply exactly: OK"
+openrouter-claude -p "Reply exactly: OK"
+openrouter-opencode run "Reply exactly: OK"
+```
+
+Defaults are `~openai/gpt-latest` for Codex and OpenCode, and `~anthropic/claude-sonnet-latest` for Claude Code. Override them globally or per agent:
+
+```bash
+export OPENROUTER_MODEL="z-ai/glm-5.2"
+export OPENROUTER_CODEX_MODEL="openai/gpt-5.3-codex"
+export OPENROUTER_CLAUDE_MODEL="~anthropic/claude-sonnet-latest"
+export OPENROUTER_OPENCODE_MODEL="z-ai/glm-5.2"
+```
+
+You can also choose a model on the command line:
+
+```bash
+openrouter-codex -m openai/gpt-5.3-codex
+openrouter-claude --model '~anthropic/claude-sonnet-latest'
+openrouter-opencode run -m z-ai/glm-5.2 "Reply exactly: OK"
+```
+
+List the models exposed by the account with any wrapper's `--list-models` option.
+
+Inside each interactive tool, use its native model picker:
+
+```text
+Codex CLI:  /model
+Claude Code: /model
+OpenCode:    /models
+```
+
+Codex and Claude Code receive a filtered catalog of OpenRouter text models that support tools. OpenCode uses its built-in OpenRouter catalog. After selecting a model, the bridge preserves the exact OpenRouter slug sent upstream; Codex and Claude also receive an explicit runtime identity instruction for accurate model-identification answers.
 
 ## Install Missing Agent CLIs
 
@@ -242,7 +327,7 @@ ilaas-agent --help
 ```bash
 python3 -m py_compile install.py ilaas_agents/*.py proxies/*.py scripts/clone_isolated_check.py
 python3 -m unittest discover -s tests
-bash -n Ilaas-codex Ilaas-claude Ilaas-opencode Ilaas-doctor Ilaas-servers install.sh
+bash -n Ilaas-codex Ilaas-claude Ilaas-opencode Ilaas-doctor Ilaas-servers glm52-codex glm52-claude glm52-opencode openrouter-codex openrouter-claude openrouter-opencode install.sh
 python3 -m sphinx -b html -W --keep-going docs docs/_build/html
 python3 -m pip install .
 ilaas-agent --help

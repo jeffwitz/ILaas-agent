@@ -41,6 +41,12 @@ class InstallTest(unittest.TestCase):
             self.assertTrue((root / "home" / ".codex-ilaas" / "model-catalogs" / "ilaas-mistral.json").exists())
             self.assertTrue((prefix / "bin" / "Ilaas-codex").exists())
             self.assertTrue((prefix / "bin" / "Ilaas-doctor").exists())
+            self.assertTrue((prefix / "bin" / "glm52-codex").exists())
+            self.assertTrue((prefix / "bin" / "glm52-claude").exists())
+            self.assertTrue((prefix / "bin" / "glm52-opencode").exists())
+            self.assertTrue((prefix / "bin" / "openrouter-codex").exists())
+            self.assertTrue((prefix / "bin" / "openrouter-claude").exists())
+            self.assertTrue((prefix / "bin" / "openrouter-opencode").exists())
             codex_config = (root / "home" / ".codex-ilaas" / "config.toml").read_text()
             self.assertIn('sandbox_mode = "workspace-write"', codex_config)
 

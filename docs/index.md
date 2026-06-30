@@ -1,6 +1,6 @@
 # ILaaS Agent
 
-Run Codex CLI, Claude Code, and OpenCode with ILaaS models through a local LiteLLM gateway.
+Run Codex CLI, Claude Code, and OpenCode with ILaaS models through a local LiteLLM gateway, or connect the same tools directly to OpenRouter.
 
 This documentation starts with the commands needed to install and launch the tools. The interface details are available after the quick start.
 
@@ -30,6 +30,11 @@ Run a first model call:
 Ilaas-opencode run --model qwen-3.6-35b-instruct "Reply exactly: OK"
 ```
 
+## Provider Setup
+
+- {doc}`ilaas`: install the local gateway, configure the ILaaS key, and launch each agent.
+- {doc}`openrouter`: configure an ignored local key file or environment variable, choose a model, and use each tool's model picker.
+
 ## Available Commands
 
 ```bash
@@ -38,6 +43,9 @@ Ilaas-claude
 Ilaas-opencode
 Ilaas-doctor
 Ilaas-servers
+openrouter-codex
+openrouter-claude
+openrouter-opencode
 ```
 
 ## Run Each Agent
@@ -95,6 +103,8 @@ llama-3.3-70b
 :maxdepth: 2
 :caption: User Guide
 
+ilaas
+openrouter
 interfaces
 compatibility
 dependencies

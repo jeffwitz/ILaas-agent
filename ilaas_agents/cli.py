@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from . import deps, doctor, models, paths, runners, smoke
+from . import deps, doctor, glm52, models, openrouter, paths, runners, smoke
 from .install import main as install_main
 
 
@@ -34,6 +34,28 @@ def main() -> None:
         if command == "claude":
             raise SystemExit(runners.run_claude(argv))
         raise SystemExit(runners.run_opencode(argv))
+
+    if len(sys.argv) >= 2 and sys.argv[1] in {"glm52-codex", "glm52-claude", "glm52-opencode"}:
+        command = sys.argv[1].removeprefix("glm52-")
+        argv = sys.argv[2:]
+        if command == "codex":
+            raise SystemExit(glm52.run_codex(argv))
+        if command == "claude":
+            raise SystemExit(glm52.run_claude(argv))
+        raise SystemExit(glm52.run_opencode(argv))
+
+    if len(sys.argv) >= 2 and sys.argv[1] in {
+        "openrouter-codex",
+        "openrouter-claude",
+        "openrouter-opencode",
+    }:
+        command = sys.argv[1].removeprefix("openrouter-")
+        argv = sys.argv[2:]
+        if command == "codex":
+            raise SystemExit(openrouter.run_codex(argv))
+        if command == "claude":
+            raise SystemExit(openrouter.run_claude(argv))
+        raise SystemExit(openrouter.run_opencode(argv))
 
     parser = argparse.ArgumentParser(description="ILaaS code-agent helper CLI.")
     sub = parser.add_subparsers(dest="command", required=True)

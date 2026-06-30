@@ -6,7 +6,23 @@ from pathlib import Path
 from . import paths
 
 
-POSIX_NAMES = ["Ilaas-codex", "Ilaas-claude", "Ilaas-opencode", "Ilaas-doctor", "Ilaas-servers"]
+POSIX_NAMES = [
+    "Ilaas-codex",
+    "Ilaas-claude",
+    "Ilaas-opencode",
+    "Ilaas-doctor",
+    "Ilaas-servers",
+    "glm52-codex",
+    "glm52-claude",
+    "glm52-opencode",
+    "openrouter-codex",
+    "openrouter-claude",
+    "openrouter-opencode",
+]
+
+
+def cli_command(name: str) -> str:
+    return name.removeprefix("Ilaas-")
 
 
 def expected_wrapper_paths(wrapper_dir: Path | None = None) -> list[Path]:
@@ -34,7 +50,7 @@ def install_wrappers(wrapper_dir: Path | None = None) -> list[Path]:
 
 def write_posix_wrapper(wrapper_dir: Path, name: str) -> Path:
     target = wrapper_dir / name
-    command = name.removeprefix("Ilaas-")
+    command = cli_command(name)
     repo = paths.repo_root()
     target.write_text(
         "#!/usr/bin/env bash\n"
@@ -48,7 +64,7 @@ def write_posix_wrapper(wrapper_dir: Path, name: str) -> Path:
 
 def write_windows_wrappers(wrapper_dir: Path, name: str) -> list[Path]:
     repo = paths.repo_root()
-    module = name.replace("Ilaas-", "")
+    module = cli_command(name)
     cmd = wrapper_dir / f"{name}.cmd"
     ps1 = wrapper_dir / f"{name}.ps1"
     cmd.write_text(
