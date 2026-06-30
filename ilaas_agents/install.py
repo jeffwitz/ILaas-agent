@@ -12,6 +12,9 @@ from pathlib import Path
 from . import config, deps, models, paths, wrappers
 
 
+DEFAULT_ILAAS_TOKEN_FILE = Path("/home/jeff/Code/clef_api/Ilaas.txt")
+
+
 def litellm_bin() -> str:
     venv = paths.litellm_venv()
     if paths.is_windows():
@@ -33,12 +36,17 @@ def resolve_api_key(args: argparse.Namespace) -> tuple[str, str]:
     existing = models.extract_existing_settings(paths.litellm_config_path())
     api_base = args.api_base or (existing[0] if existing else models.DEFAULT_API_BASE)
     api_key = os.environ.get(args.api_key_env or "ILAAS_API_KEY")
+    api_key_file = Path(getattr(args, "api_key_file", None)).expanduser() if getattr(args, "api_key_file", None) else DEFAULT_ILAAS_TOKEN_FILE
+    if not api_key and api_key_file.is_file():
+        api_key = api_key_file.read_text(encoding="utf-8").strip()
     if not api_key and existing:
         api_key = existing[1]
     if not api_key and not args.non_interactive:
         api_key = getpass.getpass("ILaaS API key: ").strip()
     if not api_key:
-        raise SystemExit("Missing ILaaS API key. Set ILAAS_API_KEY or run interactively.")
+        raise SystemExit(f"Missing ILaaS API key. Set ILAAS_API_KEY, put it in {api_key_file}, or run interactively.")
+    if any(character.isspace() for character in api_key):
+        raise SystemExit("The ILaaS API key must be a single non-empty value.")
     return api_base, api_key
 
 
@@ -117,6 +125,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Install ILaaS local code-agent tooling.")
     parser.add_argument("--non-interactive", action="store_true")
     parser.add_argument("--api-key-env", default="ILAAS_API_KEY")
+    parser.add_argument("--api-key-file", default=None, help=f"Read the ILaaS API key from a file. Defaults to {DEFAULT_ILAAS_TOKEN_FILE} when present.")
     parser.add_argument("--api-base", default=None)
     parser.add_argument("--skip-litellm-install", action="store_true")
     parser.add_argument("--prefix", default=None, help="Install wrappers into PREFIX/bin instead of the platform default bin directory.")

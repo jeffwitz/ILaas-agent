@@ -37,7 +37,7 @@ The `glm52-*` commands use the GLM 5.2 API directly, independently of the ILaaS 
 ```bash
 git clone https://github.com/jeffwitz/ILaas-agent.git
 cd ILaas-agent
-ILAAS_API_KEY="your_ilaas_key" python3 install.py
+python3 install.py
 ```
 
 If `~/.local/bin` is not already in your shell path:
@@ -102,13 +102,13 @@ Ilaas-claude --list-models
 
 ## GLM 5.2 Direct API
 
-Put the Z.AI token alone on one line in `GLM5.2.md` at the repository root, or export it without a file:
+Put the Z.AI token alone on one line in `/home/jeff/Code/clef_api/GLM5.2.md`, or export it without a file:
 
 ```bash
 export GLM52_API_KEY="your_zai_key"
 ```
 
-The token file is ignored by Git and read only when a `glm52-*` command starts. Run the three agents with:
+The external token file stays outside the Git repository and is read only when a `glm52-*` command starts. Legacy root-level `GLM5.2.md` is still ignored by Git but should not be used because it can be picked up by code indexing. Run the three agents with:
 
 ```bash
 glm52-codex exec --skip-git-repo-check "Reply exactly: OK"
@@ -129,13 +129,13 @@ Codex uses the repository's local Responses-to-Chat-Completions adapter because 
 
 ## OpenRouter Direct API
 
-Put the OpenRouter key alone on one line in `OPENROUTER.md` or `OPEN_ROUTER.md`, or export it:
+Put the OpenRouter key alone on one line in `/home/jeff/Code/clef_api/OPEN_ROUTER.md`, or export it:
 
 ```bash
 export OPENROUTER_API_KEY="sk-or-..."
 ```
 
-The key files are ignored by Git. The launchers use OpenRouter's native integrations directly:
+The external key file stays outside the Git repository. Legacy root-level key files are still ignored by Git for compatibility. The launchers use OpenRouter's native integrations directly:
 
 ```bash
 openrouter-codex exec --skip-git-repo-check "Reply exactly: OK"

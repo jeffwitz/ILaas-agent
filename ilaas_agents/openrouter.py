@@ -20,6 +20,7 @@ DEFAULT_OPENCODE_MODEL = "~openai/gpt-latest"
 DEFAULT_OPENAI_BASE_URL = "https://openrouter.ai/api/v1"
 DEFAULT_ANTHROPIC_BASE_URL = "https://openrouter.ai/api"
 PROVIDER_ID = "openrouter"
+DEFAULT_TOKEN_FILE = Path("/home/jeff/Code/clef_api/OPEN_ROUTER.md")
 
 
 def api_key() -> str:
@@ -30,6 +31,7 @@ def api_key() -> str:
         explicit = os.environ.get("OPENROUTER_TOKEN_FILE")
         candidates = [
             Path(explicit).expanduser() if explicit else None,
+            DEFAULT_TOKEN_FILE,
             paths.repo_root() / "OPENROUTER.md",
             paths.repo_root() / "OPEN_ROUTER.md",
         ]
@@ -37,7 +39,7 @@ def api_key() -> str:
         if token_path is None:
             raise SystemExit(
                 "OpenRouter token not found. Set OPENROUTER_API_KEY or "
-                "put it in OPENROUTER.md or OPEN_ROUTER.md."
+                f"put it in {DEFAULT_TOKEN_FILE}, OPENROUTER.md or OPEN_ROUTER.md."
             )
         token = token_path.read_text(encoding="utf-8").strip()
 

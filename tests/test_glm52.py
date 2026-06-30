@@ -13,6 +13,15 @@ class Glm52Test(unittest.TestCase):
         with mock.patch.dict(os.environ, {"GLM52_API_KEY": "secret"}, clear=False):
             self.assertEqual(glm52.api_key(), "secret")
 
+    def test_api_key_uses_default_external_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            token_file = Path(tmp, "GLM5.2.md")
+            token_file.write_text("glm-external-secret\n")
+            with mock.patch.dict(os.environ, {}, clear=True), mock.patch(
+                "ilaas_agents.glm52.DEFAULT_TOKEN_FILE", token_file
+            ):
+                self.assertEqual(glm52.api_key(), "glm-external-secret")
+
     def test_opencode_config_uses_glm52_provider(self):
         with mock.patch.dict(os.environ, {}, clear=True):
             payload = json.loads(glm52.opencode_config_content())

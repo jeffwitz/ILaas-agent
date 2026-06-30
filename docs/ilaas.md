@@ -4,18 +4,24 @@ ILaaS Agent installs a local LiteLLM gateway and adapters for Codex CLI, Claude 
 
 ## Install
 
-Clone the repository, export the ILaaS key for the installer, then remove it from the current shell when installation is complete:
+Clone the repository, then keep the ILaaS key outside the Git checkout. The default local key path is `/home/jeff/Code/clef_api/Ilaas.txt`:
 
 ```bash
 git clone https://github.com/jeffwitz/ILaas-agent.git
 cd ILaas-agent
+python3 install.py
+```
+
+The installer reads `/home/jeff/Code/clef_api/Ilaas.txt` when `ILAAS_API_KEY` is not set. You can override the path with `--api-key-file`, or keep using an environment variable:
+
+```bash
 read -rsp "ILaaS API key: " ILAAS_API_KEY
 export ILAAS_API_KEY
 python3 install.py
 unset ILAAS_API_KEY
 ```
 
-The hidden `read` prompt keeps the key out of the terminal display and shell history. Do not put an ILaaS key in a tracked repository file.
+Do not put an ILaaS key in a tracked repository file.
 
 The installer fetches the account's current model list and creates the local configuration under `~/.config`. The LiteLLM configuration containing the key is stored at `~/.config/litellm/ilaas-mistral.yaml` with restrictive file permissions; it is not written into the Git checkout.
 
@@ -60,10 +66,7 @@ OpenCode uses `/models` in the plural. The list reflects the model catalog fetch
 Rerun the installer to fetch the current catalog and rewrite the generated configuration. `--force` preserves backups of existing generated configuration files before replacing them:
 
 ```bash
-read -rsp "ILaaS API key: " ILAAS_API_KEY
-export ILAAS_API_KEY
 python3 install.py --force
-unset ILAAS_API_KEY
 ```
 
 ## Runtime layout

@@ -10,6 +10,16 @@ from ilaas_agents import install
 
 
 class InstallTest(unittest.TestCase):
+    def test_resolve_api_key_supports_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            token_file = Path(tmp, "Ilaas.txt")
+            token_file.write_text("ilaas-file-secret\n")
+            args = argparse.Namespace(api_base=None, api_key_env="ILAAS_API_KEY", api_key_file=str(token_file), non_interactive=True)
+            with mock.patch.dict("os.environ", {}, clear=True), mock.patch(
+                "ilaas_agents.models.extract_existing_settings", return_value=None
+            ):
+                self.assertEqual(install.resolve_api_key(args), ("https://llm.ilaas.fr/v1", "ilaas-file-secret"))
+
     def test_isolated_install_writes_under_overridden_paths(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

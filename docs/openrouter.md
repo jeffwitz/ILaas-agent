@@ -11,20 +11,19 @@ read -rsp "OpenRouter API key: " OPENROUTER_API_KEY
 export OPENROUTER_API_KEY
 ```
 
-For a persistent local setup, put only the key on one line in either `OPENROUTER.md` or `OPEN_ROUTER.md` at the repository root:
+For a persistent local setup, put only the key on one line in `/home/jeff/Code/clef_api/OPEN_ROUTER.md`. This external path is used by default when `OPENROUTER_API_KEY` is not set:
 
 ```text
 sk-or-v1-...
 ```
 
-Both names are ignored by this repository's `.gitignore`. Restrict access to the file and verify that Git ignores it:
+Restrict access to the external key file:
 
 ```bash
-chmod 600 OPENROUTER.md
-git check-ignore -v OPENROUTER.md
+chmod 600 /home/jeff/Code/clef_api/OPEN_ROUTER.md
 ```
 
-Never force-add either key file and never paste a key into committed configuration or documentation. The environment variable takes precedence over the local file. A file stored elsewhere can be selected with `OPENROUTER_TOKEN_FILE=/absolute/path/to/key`.
+Legacy root-level files `OPENROUTER.md` and `OPEN_ROUTER.md` are still supported for compatibility and ignored by Git, but the external `/home/jeff/Code/clef_api/OPEN_ROUTER.md` path is preferred because it stays outside the repository and outside code indexing. The environment variable takes precedence over the local file. A file stored elsewhere can be selected with `OPENROUTER_TOKEN_FILE=/absolute/path/to/key`.
 
 ## Launch the agents
 

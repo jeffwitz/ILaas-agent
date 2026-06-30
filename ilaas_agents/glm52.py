@@ -15,6 +15,7 @@ DEFAULT_MODEL = "glm-5.2"
 DEFAULT_OPENAI_BASE_URL = "https://api.z.ai/api/paas/v4"
 DEFAULT_ANTHROPIC_BASE_URL = "https://api.z.ai/api/anthropic"
 PROVIDER_ID = "glm52"
+DEFAULT_TOKEN_FILE = Path("/home/jeff/Code/clef_api/GLM5.2.md")
 
 
 def model_name() -> str:
@@ -26,7 +27,7 @@ def api_key() -> str:
     if configured:
         return configured.strip()
 
-    token_path = Path(os.environ.get("GLM52_TOKEN_FILE", paths.repo_root() / "GLM5.2.md")).expanduser()
+    token_path = Path(os.environ.get("GLM52_TOKEN_FILE", DEFAULT_TOKEN_FILE)).expanduser()
     if not token_path.is_file():
         raise SystemExit(
             f"GLM 5.2 token not found: {token_path}. "

@@ -9,7 +9,7 @@ This documentation starts with the commands needed to install and launch the too
 ```bash
 git clone https://github.com/jeffwitz/ILaas-agent.git
 cd ILaas-agent
-ILAAS_API_KEY="your_ilaas_key" python3 install.py
+python3 install.py
 ```
 
 If `~/.local/bin` is not already in your shell path:

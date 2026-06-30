@@ -17,9 +17,20 @@ class OpenRouterTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             Path(tmp, "OPEN_ROUTER.md").write_text("sk-or-file-secret\n")
             with mock.patch.dict(os.environ, {}, clear=True), mock.patch(
+                "ilaas_agents.openrouter.DEFAULT_TOKEN_FILE", Path(tmp) / "missing-external-token"
+            ), mock.patch(
                 "ilaas_agents.openrouter.paths.repo_root", return_value=Path(tmp)
             ):
                 self.assertEqual(openrouter.api_key(), "sk-or-file-secret")
+
+    def test_api_key_uses_default_external_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            token_file = Path(tmp, "OPEN_ROUTER.md")
+            token_file.write_text("sk-or-external-secret\n")
+            with mock.patch.dict(os.environ, {}, clear=True), mock.patch(
+                "ilaas_agents.openrouter.DEFAULT_TOKEN_FILE", token_file
+            ):
+                self.assertEqual(openrouter.api_key(), "sk-or-external-secret")
 
     def test_default_models_use_openrouter_aliases(self):
         with mock.patch.dict(os.environ, {}, clear=True):
