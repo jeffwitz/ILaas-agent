@@ -193,7 +193,9 @@ def run_codex(argv: list[str]) -> int:
         ensure_litellm(manager, cfg)
         ensure_codex_proxy(manager, cfg)
         env = os.environ.copy()
-        env["CODEX_HOME"] = env.get("CODEX_HOME", str(paths.codex_home()))
+        # Force the isolated home (overridable via ILAAS_CODEX_HOME) so a stray
+        # inherited CODEX_HOME can never point Codex at the user's real ~/.codex.
+        env["CODEX_HOME"] = str(paths.codex_home())
         env["OPENAI_API_KEY"] = env.get("OPENAI_API_KEY", "sk-local-dummy")
         return foreground_call(["codex", *argv], env=env)
     finally:
