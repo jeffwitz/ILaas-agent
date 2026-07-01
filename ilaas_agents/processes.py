@@ -64,10 +64,28 @@ class ProcessManager:
     def cleanup(self, keep: bool = False) -> None:
         if keep:
             return
-        for item in reversed(self.started):
-            terminate_pid(item.process.pid)
-            if item.pid_file and item.pid_file.exists():
-                item.pid_file.unlink(missing_ok=True)
+        # Shutting the servers down must not be interruptible: a Ctrl-C (or a
+        # second one, impatient) landing in terminate_pid's wait would otherwise
+        # escape as a KeyboardInterrupt traceback. Ignore SIGINT for the wind-down.
+        previous = None
+        try:
+            previous = signal.signal(signal.SIGINT, signal.SIG_IGN)
+        except (ValueError, OSError):
+            previous = None  # not in the main thread; nothing to guard
+        try:
+            for item in reversed(self.started):
+                try:
+                    terminate_pid(item.process.pid)
+                except KeyboardInterrupt:
+                    pass  # a stray in-flight Ctrl-C: keep tearing the rest down
+                if item.pid_file and item.pid_file.exists():
+                    item.pid_file.unlink(missing_ok=True)
+        finally:
+            if previous is not None:
+                try:
+                    signal.signal(signal.SIGINT, previous)
+                except (ValueError, OSError):
+                    pass
 
 
 def terminate_pid(pid: int, timeout: float = 5.0) -> None:
@@ -82,10 +100,13 @@ def terminate_pid(pid: int, timeout: float = 5.0) -> None:
         return
 
     deadline = time.time() + timeout
-    while time.time() < deadline:
-        if not pid_alive(pid):
-            return
-        time.sleep(0.1)
+    try:
+        while time.time() < deadline:
+            if not pid_alive(pid):
+                return
+            time.sleep(0.1)
+    except KeyboardInterrupt:
+        pass  # impatient Ctrl-C: skip the graceful wait, go straight to SIGKILL
     try:
         os.kill(pid, signal.SIGKILL)
     except OSError:
