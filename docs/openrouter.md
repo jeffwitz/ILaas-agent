@@ -86,3 +86,19 @@ export OPENROUTER_ANTHROPIC_BASE_URL="https://openrouter.ai/api"
 ```
 
 Codex uses the project's Responses adapter, Claude Code uses a local Anthropic-compatible discovery and passthrough adapter, and OpenCode uses its native OpenRouter provider.
+
+## Codex isolation from your real ~/.codex
+
+`openrouter-codex` runs Codex with a dedicated `CODEX_HOME` so it never touches
+your regular Codex install. This matters because a ChatGPT login in `~/.codex`
+makes Codex reject non-OpenAI models ("model is not supported when using Codex
+with a ChatGPT account"). The bridge points Codex at its own home instead:
+
+```text
+openrouter-codex -> ~/.codex-openrouter    ($OPENROUTER_CODEX_HOME)
+glm52-codex      -> ~/.codex-glm52          ($GLM52_CODEX_HOME)
+Ilaas-codex      -> ~/.codex-ilaas          ($ILAAS_CODEX_HOME)
+```
+
+Your own `~/.codex` (and its ChatGPT/OpenAI login) is left untouched. Override
+the isolated home with the matching environment variable if needed.

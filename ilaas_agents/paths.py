@@ -63,6 +63,16 @@ def codex_home() -> Path:
     return env_path("ILAAS_CODEX_HOME", home() / ".codex-ilaas")
 
 
+def codex_home_openrouter() -> Path:
+    """Isolated Codex home for the OpenRouter bridge (never the user's ~/.codex)."""
+    return env_path("OPENROUTER_CODEX_HOME", home() / ".codex-openrouter")
+
+
+def codex_home_glm52() -> Path:
+    """Isolated Codex home for the GLM 5.2 bridge (never the user's ~/.codex)."""
+    return env_path("GLM52_CODEX_HOME", home() / ".codex-glm52")
+
+
 def codex_config_path() -> Path:
     return codex_home() / "config.toml"
 

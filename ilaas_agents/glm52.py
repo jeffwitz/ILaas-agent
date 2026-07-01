@@ -141,6 +141,9 @@ def run_codex(argv: list[str]) -> int:
         catalog = codex_catalog_path()
         env = os.environ.copy()
         env["GLM52_API_KEY"] = key
+        # Isolate from the user's real Codex (~/.codex): a ChatGPT login there
+        # makes Codex reject non-OpenAI models.
+        env["CODEX_HOME"] = str(paths.codex_home_glm52())
         overrides = [
             "-c",
             f'model="{model}"',

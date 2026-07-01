@@ -51,7 +51,10 @@ class OpenRouterTest(unittest.TestCase):
         self.assertIn('model_providers.openrouter.base_url="https://openrouter.ai/api/v1"', command)
         self.assertIn('model_providers.openrouter.wire_api="responses"', command)
         self.assertIn('model_catalog_json="/tmp/openrouter-catalog.json"', command)
-        self.assertEqual(call.call_args.kwargs["env"]["OPENROUTER_API_KEY"], "sk-or-secret")
+        env = call.call_args.kwargs["env"]
+        self.assertEqual(env["OPENROUTER_API_KEY"], "sk-or-secret")
+        self.assertTrue(env["CODEX_HOME"].endswith(".codex-openrouter"))
+        self.assertFalse(env["CODEX_HOME"].endswith("/.codex"))  # never the user's real Codex
 
     def test_codex_catalog_uses_openrouter_metadata(self):
         metadata = [

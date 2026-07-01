@@ -76,6 +76,9 @@ class Glm52Test(unittest.TestCase):
         self.assertIn('model="glm-5.2"', command)
         self.assertIn('model_providers.glm52.wire_api="responses"', command)
         self.assertIn('model_catalog_json="/tmp/glm52-catalog.json"', command)
+        env = call.call_args.kwargs["env"]
+        self.assertTrue(env["CODEX_HOME"].endswith(".codex-glm52"))
+        self.assertFalse(env["CODEX_HOME"].endswith("/.codex"))  # never the user's real Codex
         manager.cleanup.assert_called_once_with()
 
 
