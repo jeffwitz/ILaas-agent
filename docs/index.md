@@ -109,6 +109,7 @@ interfaces
 compatibility
 dependencies
 tiers
+economy
 models
 codex
 claude-code

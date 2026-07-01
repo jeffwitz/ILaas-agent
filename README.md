@@ -294,6 +294,19 @@ The Codex and Claude Code proxies are minimal compatibility layers for the teste
 
 Read the details in [docs/interfaces.md](docs/interfaces.md).
 
+## Measure The Token Savings
+
+`scripts/token_economy.py` reports how much the tier/delegation strategy actually
+saves, by reading Claude Code session transcripts and comparing the real cost to
+an all-on-Opus baseline:
+
+```bash
+python3 scripts/token_economy.py --economy --all \
+  --projects-dir ~/.claude_openrouter/projects
+```
+
+Prices are editable at the top of the script. See [docs/economy.md](docs/economy.md).
+
 ## Documentation
 
 Start here:
@@ -307,6 +320,7 @@ docs/codex.md
 docs/claude-code.md
 docs/opencode.md
 docs/models.md
+docs/economy.md
 docs/troubleshooting.md
 docs/windows.md
 ```
