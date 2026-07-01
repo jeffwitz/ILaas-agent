@@ -305,7 +305,9 @@ python3 scripts/token_economy.py --economy --all \
   --projects-dir ~/.claude_openrouter/projects
 ```
 
-Prices are editable at the top of the script. See [docs/economy.md](docs/economy.md).
+`install.py` also deploys an `/economy` slash command into the openrouter/GLM
+config home, so you can run the same report from inside Claude Code. Prices are
+editable at the top of the script. See [docs/economy.md](docs/economy.md).
 
 ## Documentation
 
@@ -339,7 +341,7 @@ ilaas-agent --help
 ## Development Checks
 
 ```bash
-python3 -m py_compile install.py ilaas_agents/*.py proxies/*.py scripts/clone_isolated_check.py
+python3 -m py_compile install.py ilaas_agents/*.py proxies/*.py scripts/*.py
 python3 -m unittest discover -s tests
 bash -n Ilaas-codex Ilaas-claude Ilaas-opencode Ilaas-doctor Ilaas-servers glm52-codex glm52-claude glm52-opencode openrouter-codex openrouter-claude openrouter-opencode install.sh
 python3 -m sphinx -b html -W --keep-going docs docs/_build/html

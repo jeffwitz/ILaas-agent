@@ -9,7 +9,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from . import config, deps, models, paths, wrappers
+from . import commands, config, deps, models, paths, wrappers
 
 
 DEFAULT_ILAAS_TOKEN_FILE = Path("/home/jeff/Code/clef_api/Ilaas.txt")
@@ -89,6 +89,7 @@ def run_install(args: argparse.Namespace) -> None:
                 paths.litellm_config_path(),
                 paths.codex_config_path(),
                 paths.model_catalog_path(),
+                commands.economy_command_path(),
                 *wrappers.expected_wrapper_paths(wrapper_dir),
             ]
         )
@@ -97,6 +98,7 @@ def run_install(args: argparse.Namespace) -> None:
     models.write_codex_catalog(paths.model_catalog_path(), model_ids)
     config.write_codex_config(paths.codex_config_path(), paths.model_catalog_path(), args.codex_sandbox_mode)
     installed = wrappers.install_wrappers(wrapper_dir)
+    economy_command = commands.install_economy_command()
 
     print(f"Installed LiteLLM config: {paths.litellm_config_path()}")
     print(f"Installed Codex config: {paths.codex_config_path()}")
@@ -106,6 +108,7 @@ def run_install(args: argparse.Namespace) -> None:
     print(f"Installed model catalog: {paths.model_catalog_path()}")
     for path in installed:
         print(f"Installed wrapper: {path}")
+    print(f"Installed /economy command: {economy_command}")
     for original, backup in backups:
         print(f"Backup: {original} -> {backup}")
     hint = wrappers.path_hint(wrapper_dir)

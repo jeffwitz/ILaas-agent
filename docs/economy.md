@@ -78,14 +78,22 @@ real cost — set it accurately before quoting a figure.
 
 ## The `/economy` command
 
-A thin slash-command wrapper can live in the openrouter config home so it is
-available from any directory in those sessions (it is not versioned with the
-repo because it is config-home specific):
+`install.py` deploys a Claude Code slash command so the report is available from
+**any directory** in sessions started by the openrouter/GLM launchers (those set
+`CLAUDE_CONFIG_DIR=~/.claude_openrouter`). The command is generated in code
+(`ilaas_agents/commands.py`) and written to:
 
 ```text
-~/.claude_openrouter/commands/economy.md
+~/.claude_openrouter/commands/economy.md      ($CLAUDE_OPENROUTER_HOME/commands)
 ```
 
-It runs the script above with `--projects-dir ~/.claude_openrouter/projects` and
-summarizes the result. Invoke it as `/economy` (optionally `/economy --by-session`).
+The generator embeds the absolute script path at install time and relies on the
+script's default projects directory (`$CLAUDE_CONFIG_DIR/projects`), so the
+command needs no hardcoded home and stays portable. Invoke it as `/economy`
+(optionally `/economy --by-session`).
+
+Re-generate it without a full reinstall:
+
+```bash
+python3 -c "from ilaas_agents import commands; commands.install_economy_command()"
 ```

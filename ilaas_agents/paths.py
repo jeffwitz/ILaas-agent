@@ -81,3 +81,12 @@ def runtime_dir() -> Path:
 
 def litellm_venv() -> Path:
     return env_path("ILAAS_LITELLM_VENV", home() / ".venvs" / "litellm")
+
+
+def claude_openrouter_home() -> Path:
+    """Config home used by the openrouter/GLM Claude Code launchers."""
+    return env_path("CLAUDE_OPENROUTER_HOME", home() / ".claude_openrouter")
+
+
+def token_economy_script() -> Path:
+    return repo_root() / "scripts" / "token_economy.py"

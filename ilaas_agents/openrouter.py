@@ -243,7 +243,7 @@ def run_claude(argv: list[str]) -> int:
             "ANTHROPIC_DEFAULT_FABLE_MODEL",
         ):
             env[variable] = model
-        env["CLAUDE_CONFIG_DIR"] = os.path.expanduser("~/.claude_openrouter")
+        env["CLAUDE_CONFIG_DIR"] = str(paths.claude_openrouter_home())
         env["ANTHROPIC_CUSTOM_MODEL_OPTION"] = model
         env["ANTHROPIC_CUSTOM_MODEL_OPTION_NAME"] = f"OpenRouter {model}"
         env["ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION"] = "Anthropic model through OpenRouter"
