@@ -9,10 +9,10 @@ Le but : rendre visible l'économie de la stratégie multi-tiers/délégation
 qui, sinon, n'est que supposée.
 
 Usage:
-    python3 token_economy.py                 # projet courant (cwd)
+    python3 token_economy.py                 # projet courant (cwd) — défaut
     python3 token_economy.py --all           # tous les projets
     python3 token_economy.py --project <nom> # un projet précis (nom du dossier)
-    python3 token_economy.py --by-session    # détail par fichier de session
+    python3 token_economy.py --by-session    # détail par fichier de session (projet courant)
 
 Les prix et le mapping rôle<-modèle sont éditables ci-dessous.
 """
@@ -33,7 +33,7 @@ DEFAULT_PROJECTS_DIR = Path(
 # --- Mapping rôle <- modèle (motifs regex, premier match gagne) -------------
 # Ajuste librement à ton setup.
 ROLE_PATTERNS = [
-    ("superviseur",     r"glm-5|glm5|claude-opus|opus-4"),
+    ("superviseur",     r"glm-5(\.|\b|$)|glm5|claude-.*opus|opus-4"),
     ("delegue-pro",     r"deepseek-v4-pro|deepseek.*pro|claude.*sonnet|sonnet"),
     ("delegue-flash",   r"deepseek-v4-flash|deepseek.*flash|haiku"),
     ("ilaas-bon-marche", r"claude-ilaas-|ilaas"),
@@ -130,7 +130,13 @@ def aggregate(files):
     by_model = defaultdict(lambda: defaultdict(int))
     by_role = defaultdict(lambda: defaultdict(float))
     side = defaultdict(lambda: defaultdict(int))
-    cost_known = True
+    # baseline/actual ne portent que sur les modèles prixés, pour que les deux
+    # termes de l'économie soient cohérents (sinon un modèle sans prix gonflait
+    # le baseline sans contrepartie côté actual -> économie surestimée).
+    stats = {
+        "baseline": 0.0, "actual": 0.0,
+        "unp_in": 0, "unp_cread": 0, "unp_ccreate": 0, "unp_out": 0, "unp_msgs": 0,
+    }
     for fn in files:
         for u in iter_assistant_usages(fn):
             tot_in = u["input"] + u["cache_read"] + u["cache_create"]
@@ -150,30 +156,37 @@ def aggregate(files):
             r["out"] += u["output"]
             c = cost(u)
             if c is None:
-                cost_known = False
+                stats["unp_in"] += u["input"]
+                stats["unp_cread"] += u["cache_read"]
+                stats["unp_ccreate"] += u["cache_create"]
+                stats["unp_out"] += u["output"]
+                stats["unp_msgs"] += 1
             else:
                 bm["cost"] += c
                 r["cost"] += c
+                stats["actual"] += c
+                pin, pcr, pout = BASELINE_PRICE
+                stats["baseline"] += (
+                    u["input"] * pin + u["cache_create"] * pin
+                    + u["cache_read"] * pcr + u["output"] * pout
+                ) / 1_000_000
             key = "sidechain" if u["sidechain"] else "main"
             side[key]["in"] += tot_in
             side[key]["out"] += u["output"]
             side[key]["msgs"] += 1
-    return by_model, by_role, side, cost_known
+    return by_model, by_role, side, stats
 
 
-def economy(by_role):
+def economy(by_role, stats):
     """Contrefactuel : coût réel vs 'stratégie basique' (tout sur Opus).
 
-    baseline = chaque token (frais, cache_create, cache_read, output) facturé
-    au tarif du superviseur premium. Le gain est la différence.
+    baseline = chaque token (frais, cache_create, cache_read, output) — mais
+    uniquement des modèles prixés — facturé au tarif du superviseur premium.
+    Le gain est la différence. Les tokens sans prix sont exclus des DEUX termes
+    (et signalés à part) pour ne pas gonfler l'économie affichée.
     """
-    pin, pcr, pout = BASELINE_PRICE
-    fresh = sum(r["fresh"] for r in by_role.values())
-    cread = sum(r["cread"] for r in by_role.values())
-    ccreate = sum(r["ccreate"] for r in by_role.values())
-    out = sum(r["out"] for r in by_role.values())
-    baseline = (fresh * pin + ccreate * pin + cread * pcr + out * pout) / 1_000_000
-    actual = sum(r.get("cost", 0.0) for r in by_role.values())
+    baseline = stats["baseline"]
+    actual = stats["actual"]
     sup_in = by_role.get("superviseur", {}).get("in", 0)
     tot_in = sum(r["in"] for r in by_role.values()) or 1
     offloaded = tot_in - sup_in
@@ -181,7 +194,8 @@ def economy(by_role):
     pct = 100 * saved / baseline if baseline else 0.0
     return {
         "baseline": baseline, "actual": actual, "saved": saved, "pct": pct,
-        "offloaded": offloaded, "tot_in": tot_in, "out": out,
+        "offloaded": offloaded, "tot_in": tot_in, "out": stats.get("out", 0),
+        "unp_in": stats["unp_in"], "unp_msgs": stats["unp_msgs"],
     }
 
 
@@ -192,6 +206,9 @@ def print_economy(e, scope):
     print(f"  coût réel (tiers + délégués) : {fmt_usd(e['actual']):>14s}")
     print(f"  ÉCONOMIE                     : {fmt_usd(e['saved']):>14s}   ({e['pct']:.1f} %)")
     print(f"  tokens déchargés du superviseur : {fmt(int(e['offloaded']))} / {fmt(int(e['tot_in']))} d'input")
+    if e["unp_msgs"]:
+        print(f"  /!\\ {e['unp_msgs']} msgs ({fmt(e['unp_in'])} tok) sans prix : "
+              f"exclus du baseline ET de l'actual -> économie sous-estimée (à ajouter dans PRICES)")
     print("  (prix indicatifs — édite PRICES / BASELINE_PRICE pour un chiffre fiable)")
 
 
@@ -251,11 +268,15 @@ def main():
     elif args.project:
         dirs = [projects_dir / args.project]
     else:
-        slug = "-" + str(Path.cwd()).strip("/").replace("/", "-")
+        # Sans argument : projet courant (cwd) uniquement — la "session par défaut".
+        # Convention Claude Code : tout caractère non alphanumérique (dont '_' et '/')
+        # est remplacé par '-' dans le slug du dossier de transcripts.
+        slug = "-" + re.sub(r"[^A-Za-z0-9.-]", "-", str(Path.cwd()).strip("/"))
         cand = projects_dir / slug
-        dirs = [cand] if cand.is_dir() else [p for p in projects_dir.iterdir() if p.is_dir()]
         if not cand.is_dir():
-            print(f"(projet {slug} introuvable, bascule sur --all)")
+            raise SystemExit(f"projet {slug} introuvable sous {projects_dir} "
+                             f"(lance avec --all pour tous les projets)")
+        dirs = [cand]
 
     files = []
     for d in dirs:
@@ -266,9 +287,9 @@ def main():
     scope = "tous projets" if (args.all or len(dirs) > 1) else dirs[0].name
 
     if args.economy:
-        bm, br, sd, _ = aggregate(files)
+        bm, br, sd, stats = aggregate(files)
         print(f"{len(files)} session(s), {len(dirs)} projet(s).")
-        print_economy(economy(br), scope)
+        print_economy(economy(br, stats), scope)
         return
 
     print(f"{len(files)} session(s), {len(dirs)} projet(s).")
