@@ -75,7 +75,7 @@ class ProcessManager:
         try:
             for item in reversed(self.started):
                 try:
-                    terminate_pid(item.process.pid)
+                    terminate_process(item.process)
                 except KeyboardInterrupt:
                     pass  # a stray in-flight Ctrl-C: keep tearing the rest down
                 if item.pid_file and item.pid_file.exists():
@@ -127,6 +127,32 @@ def foreground_call(argv: list[str], env: dict[str, str] | None = None) -> int:
                     signal.signal(sig, previous)
                 except (ValueError, OSError):
                     pass
+
+
+def terminate_process(process: subprocess.Popen, timeout: float = 5.0) -> None:
+    """Terminate a child we own, reaping it so shutdown returns immediately.
+
+    Uses the Popen handle rather than a bare pid: ``process.wait()`` reaps the
+    child the instant it dies, so a server that honours SIGTERM is gone in
+    milliseconds. ``terminate_pid`` (below) polls ``os.kill(pid, 0)``, which
+    keeps seeing an unreaped child as a zombie and would burn the full timeout.
+    """
+    if process.poll() is not None:
+        return
+    try:
+        process.terminate()  # SIGTERM
+    except OSError:
+        return
+    try:
+        process.wait(timeout=timeout)
+        return
+    except subprocess.TimeoutExpired:
+        pass
+    try:
+        process.kill()  # SIGKILL
+        process.wait(timeout=timeout)
+    except (OSError, subprocess.TimeoutExpired):
+        pass
 
 
 def terminate_pid(pid: int, timeout: float = 5.0) -> None:

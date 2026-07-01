@@ -20,7 +20,7 @@ class CleanupInterruptTest(unittest.TestCase):
 
         # Simulate an impatient Ctrl-C landing inside the shutdown wait: because
         # cleanup ignores SIGINT for its duration, this must not escape.
-        with mock.patch.object(processes, "terminate_pid", side_effect=KeyboardInterrupt):
+        with mock.patch.object(processes, "terminate_process", side_effect=KeyboardInterrupt):
             try:
                 manager.cleanup()
             except KeyboardInterrupt:  # pragma: no cover - the regression we fixed
@@ -37,6 +37,31 @@ class CleanupInterruptTest(unittest.TestCase):
 
         self.assertIn(signal.SIGTERM, calls)
         self.assertIn(signal.SIGKILL, calls)
+
+
+class TerminateProcessTest(unittest.TestCase):
+    def test_sigterm_honoring_child_is_reaped_fast(self):
+        import subprocess
+        import time
+
+        proc = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+        start = time.monotonic()
+        processes.terminate_process(proc, timeout=5.0)
+        elapsed = time.monotonic() - start
+        self.assertIsNotNone(proc.poll())          # reaped, not a lingering zombie
+        self.assertLess(elapsed, 2.0)              # nowhere near the 5s timeout
+
+    @unittest.skipIf(sys.platform.startswith("win"), "POSIX signal handling")
+    def test_sigterm_ignoring_child_is_escalated_to_kill(self):
+        import subprocess
+
+        proc = subprocess.Popen([
+            sys.executable,
+            "-c",
+            "import signal,time; signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(30)",
+        ])
+        processes.terminate_process(proc, timeout=0.5)
+        self.assertIsNotNone(proc.poll())
 
 
 class ForegroundCallTest(unittest.TestCase):
