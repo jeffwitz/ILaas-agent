@@ -12,7 +12,7 @@ from pathlib import Path
 
 from . import paths
 from . import tiers
-from .processes import ProcessManager, pid_file, python_executable, read_pid, terminate_pid
+from .processes import ProcessManager, foreground_call, pid_file, python_executable, read_pid, terminate_pid
 
 
 MODEL_PREFIX = "claude-ilaas-"
@@ -195,7 +195,7 @@ def run_codex(argv: list[str]) -> int:
         env = os.environ.copy()
         env["CODEX_HOME"] = env.get("CODEX_HOME", str(paths.codex_home()))
         env["OPENAI_API_KEY"] = env.get("OPENAI_API_KEY", "sk-local-dummy")
-        return subprocess.call(["codex", *argv], env=env)
+        return foreground_call(["codex", *argv], env=env)
     finally:
         manager.cleanup(keep=keep)
 
@@ -260,7 +260,7 @@ def run_claude(argv: list[str]) -> int:
         env["ANTHROPIC_CUSTOM_MODEL_OPTION"] = env.get("ANTHROPIC_CUSTOM_MODEL_OPTION", selected)
         env["ANTHROPIC_CUSTOM_MODEL_OPTION_NAME"] = env.get("ANTHROPIC_CUSTOM_MODEL_OPTION_NAME", f"ILaaS {selected.removeprefix(MODEL_PREFIX)}")
         env["ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION"] = env.get("ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION", "ILaaS model through local gateway")
-        return subprocess.call(["claude", *rewritten], env=env)
+        return foreground_call(["claude", *rewritten], env=env)
     finally:
         manager.cleanup(keep=keep)
 
@@ -342,7 +342,7 @@ def run_opencode(argv: list[str]) -> int:
         env = os.environ.copy()
         env["OPENAI_API_KEY"] = env.get("OPENAI_API_KEY", "sk-local-dummy")
         env["OPENCODE_CONFIG_CONTENT"] = opencode_config_content(cfg)
-        return subprocess.call(["opencode", *rewrite_opencode_model_args(argv)], env=env)
+        return foreground_call(["opencode", *rewrite_opencode_model_args(argv)], env=env)
     finally:
         manager.cleanup(keep=keep)
 

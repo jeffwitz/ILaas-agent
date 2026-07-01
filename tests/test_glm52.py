@@ -42,7 +42,7 @@ class Glm52Test(unittest.TestCase):
             os.environ,
             {"GLM52_API_KEY": "secret", "ANTHROPIC_API_KEY": "old-key"},
             clear=True,
-        ), mock.patch("ilaas_agents.glm52.subprocess.call", return_value=0) as call:
+        ), mock.patch("ilaas_agents.glm52.foreground_call", return_value=0) as call:
             self.assertEqual(glm52.run_claude(["-p", "hello"]), 0)
         command = call.call_args.args[0]
         env = call.call_args.kwargs["env"]
@@ -53,7 +53,7 @@ class Glm52Test(unittest.TestCase):
 
     def test_run_opencode_injects_provider_config(self):
         with mock.patch.dict(os.environ, {"GLM52_API_KEY": "secret"}, clear=True), mock.patch(
-            "ilaas_agents.glm52.subprocess.call", return_value=0
+            "ilaas_agents.glm52.foreground_call", return_value=0
         ) as call:
             self.assertEqual(glm52.run_opencode(["run", "hello"]), 0)
         env = call.call_args.kwargs["env"]
@@ -68,7 +68,7 @@ class Glm52Test(unittest.TestCase):
             "ilaas_agents.glm52.start_codex_proxy"
         ) as start_proxy, mock.patch(
             "ilaas_agents.glm52.codex_catalog_path", return_value=Path("/tmp/glm52-catalog.json")
-        ), mock.patch("ilaas_agents.glm52.subprocess.call", return_value=0) as call:
+        ), mock.patch("ilaas_agents.glm52.foreground_call", return_value=0) as call:
             self.assertEqual(glm52.run_codex(["exec", "hello"]), 0)
         start_proxy.assert_called_once_with(manager, "127.0.0.1", 4567)
         command = call.call_args.args[0]

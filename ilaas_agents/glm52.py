@@ -9,7 +9,7 @@ from pathlib import Path
 from . import paths
 from . import tiers
 from .models import MODEL_TEMPLATE
-from .processes import ProcessManager, python_executable
+from .processes import ProcessManager, foreground_call, python_executable
 
 
 DEFAULT_MODEL = "glm-5.2"
@@ -159,7 +159,7 @@ def run_codex(argv: list[str]) -> int:
             "-c",
             f'model_catalog_json="{catalog}"',
         ]
-        return subprocess.call(["codex", *overrides, *argv], env=env)
+        return foreground_call(["codex", *overrides, *argv], env=env)
     finally:
         manager.cleanup()
 
@@ -189,7 +189,7 @@ def run_claude(argv: list[str]) -> int:
     env["ANTHROPIC_CUSTOM_MODEL_OPTION"] = model
     env["ANTHROPIC_CUSTOM_MODEL_OPTION_NAME"] = "GLM 5.2"
     env["ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION"] = "GLM 5.2 through Z.AI"
-    return subprocess.call(["claude", *argv], env=env)
+    return foreground_call(["claude", *argv], env=env)
 
 
 def opencode_model_name(model: str) -> str:
@@ -224,4 +224,4 @@ def run_opencode(argv: list[str]) -> int:
     env = os.environ.copy()
     env["GLM52_API_KEY"] = api_key()
     env["OPENCODE_CONFIG_CONTENT"] = opencode_config_content()
-    return subprocess.call(["opencode", *rewrite_opencode_model_args(argv)], env=env)
+    return foreground_call(["opencode", *rewrite_opencode_model_args(argv)], env=env)

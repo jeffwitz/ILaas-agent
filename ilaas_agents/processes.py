@@ -88,6 +88,47 @@ class ProcessManager:
                     pass
 
 
+def foreground_call(argv: list[str], env: dict[str, str] | None = None) -> int:
+    """Run an interactive child in the foreground, letting *it* own Ctrl-C.
+
+    A launcher must not intercept SIGINT while the agent runs: the signal reaches
+    the whole foreground process group, and if the parent handles it, it jumps to
+    its ``finally`` and tears the backing servers down while the agent is still
+    alive — so the user has to press Ctrl-C a second time to actually quit.
+
+    We ignore SIGINT/SIGQUIT in the parent for the child's lifetime and reset them
+    to the default in the child (it inherits our SIG_IGN otherwise, which would
+    make it ignore Ctrl-C entirely). Cleanup then runs only after the agent exits.
+    """
+    if paths.is_windows():
+        return subprocess.call(argv, env=env)
+
+    def _reset_child_signals() -> None:  # post-fork, pre-exec, in the child
+        signal.signal(signal.SIGINT, signal.SIG_DFL)
+        signal.signal(signal.SIGQUIT, signal.SIG_DFL)
+
+    saved: dict[int, object] = {}
+    for sig in (signal.SIGINT, signal.SIGQUIT):
+        try:
+            saved[sig] = signal.signal(sig, signal.SIG_IGN)
+        except (ValueError, OSError):
+            saved[sig] = None
+    try:
+        process = subprocess.Popen(argv, env=env, preexec_fn=_reset_child_signals)
+        while True:
+            try:
+                return process.wait()
+            except KeyboardInterrupt:
+                continue  # ignored here; the child is handling the interrupt
+    finally:
+        for sig, previous in saved.items():
+            if previous is not None:
+                try:
+                    signal.signal(sig, previous)
+                except (ValueError, OSError):
+                    pass
+
+
 def terminate_pid(pid: int, timeout: float = 5.0) -> None:
     try:
         if paths.is_windows():

@@ -1,4 +1,5 @@
 import signal
+import sys
 import unittest
 from unittest import mock
 
@@ -36,6 +37,29 @@ class CleanupInterruptTest(unittest.TestCase):
 
         self.assertIn(signal.SIGTERM, calls)
         self.assertIn(signal.SIGKILL, calls)
+
+
+class ForegroundCallTest(unittest.TestCase):
+    def test_returns_child_exit_code(self):
+        self.assertEqual(processes.foreground_call([sys.executable, "-c", "raise SystemExit(7)"]), 7)
+
+    def test_restores_parent_sigint_handler(self):
+        before = signal.getsignal(signal.SIGINT)
+        processes.foreground_call([sys.executable, "-c", ""])
+        self.assertEqual(signal.getsignal(signal.SIGINT), before)
+
+    @unittest.skipIf(sys.platform.startswith("win"), "POSIX signal reset only")
+    def test_child_does_not_inherit_ignored_sigint(self):
+        # Parent ignores SIGINT during the call; the child must NOT inherit that
+        # SIG_IGN (else it would ignore Ctrl-C entirely). A Python child re-arms
+        # its own handler once the disposition is no longer SIG_IGN, so we assert
+        # the child sees anything other than SIG_IGN.
+        code = processes.foreground_call([
+            sys.executable,
+            "-c",
+            "import signal,sys; sys.exit(3 if signal.getsignal(signal.SIGINT)==signal.SIG_IGN else 0)",
+        ])
+        self.assertEqual(code, 0)
 
 
 if __name__ == "__main__":

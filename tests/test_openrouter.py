@@ -42,7 +42,7 @@ class OpenRouterTest(unittest.TestCase):
         with mock.patch.dict(os.environ, {"OPENROUTER_API_KEY": "sk-or-secret"}, clear=True), mock.patch(
             "ilaas_agents.openrouter.codex_catalog_path", return_value=Path("/tmp/openrouter-catalog.json")
         ), mock.patch(
-            "ilaas_agents.openrouter.subprocess.call", return_value=0
+            "ilaas_agents.openrouter.foreground_call", return_value=0
         ) as call:
             self.assertEqual(openrouter.run_codex(["exec", "hello"]), 0)
         command = call.call_args.args[0]
@@ -102,7 +102,7 @@ class OpenRouterTest(unittest.TestCase):
         ), mock.patch(
             "ilaas_agents.openrouter.start_claude_proxy"
         ) as start_proxy, mock.patch(
-            "ilaas_agents.openrouter.subprocess.call", return_value=0
+            "ilaas_agents.openrouter.foreground_call", return_value=0
         ) as call:
             self.assertEqual(openrouter.run_claude(["-p", "hello"]), 0)
         env = call.call_args.kwargs["env"]
