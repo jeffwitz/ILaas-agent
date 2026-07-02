@@ -33,13 +33,15 @@ class OpenRouterTest(unittest.TestCase):
                 self.assertEqual(openrouter.api_key(), "sk-or-external-secret")
 
     def test_default_models_use_openrouter_aliases(self):
-        with mock.patch.dict(os.environ, {}, clear=True):
+        # Isolate the tier catalog so resolution falls back to the built-in
+        # defaults instead of reading whatever is in the user's real cache.
+        with mock.patch.dict(os.environ, {"OPENROUTER_TIER_CATALOG": "/nonexistent/or-tiers.json"}, clear=True):
             self.assertEqual(openrouter.codex_model(), "~openai/gpt-latest")
             self.assertEqual(openrouter.claude_model(), "z-ai/glm-5.2")
             self.assertEqual(openrouter.opencode_model(), "~openai/gpt-latest")
 
     def test_run_codex_uses_direct_responses_provider(self):
-        with mock.patch.dict(os.environ, {"OPENROUTER_API_KEY": "sk-or-secret"}, clear=True), mock.patch(
+        with mock.patch.dict(os.environ, {"OPENROUTER_API_KEY": "sk-or-secret", "OPENROUTER_TIER_CATALOG": "/nonexistent/or-tiers.json"}, clear=True), mock.patch(
             "ilaas_agents.openrouter.codex_catalog_path", return_value=Path("/tmp/openrouter-catalog.json")
         ), mock.patch(
             "ilaas_agents.openrouter.foreground_call", return_value=0
@@ -98,7 +100,7 @@ class OpenRouterTest(unittest.TestCase):
         manager = mock.Mock()
         with mock.patch.dict(
             os.environ,
-            {"OPENROUTER_API_KEY": "sk-or-secret", "ANTHROPIC_API_KEY": "old-key"},
+            {"OPENROUTER_API_KEY": "sk-or-secret", "ANTHROPIC_API_KEY": "old-key", "OPENROUTER_TIER_CATALOG": "/nonexistent/or-tiers.json"},
             clear=True,
         ), mock.patch("ilaas_agents.openrouter.ProcessManager", return_value=manager), mock.patch(
             "ilaas_agents.openrouter.available_port", return_value=4568
