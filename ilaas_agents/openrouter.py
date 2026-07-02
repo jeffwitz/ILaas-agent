@@ -198,8 +198,10 @@ def run_codex(argv: list[str]) -> int:
     env["OPENROUTER_API_KEY"] = api_key()
     # Isolate from the user's real Codex (~/.codex): otherwise Codex picks up a
     # ChatGPT login there and rejects non-OpenAI models ("not supported when
-    # using Codex with a ChatGPT account").
-    env["CODEX_HOME"] = str(paths.codex_home_openrouter())
+    # using Codex with a ChatGPT account"). Codex requires the home to exist.
+    codex_home = paths.codex_home_openrouter()
+    codex_home.mkdir(parents=True, exist_ok=True)
+    env["CODEX_HOME"] = str(codex_home)
     overrides = [
         "-c",
         f'model="{model}"',
