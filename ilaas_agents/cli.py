@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from . import deps, doctor, glm52, models, openrouter, paths, runners, smoke, tiers
+from . import deps, doctor, glm52, harness, models, openrouter, paths, runners, smoke, tiers
 from .install import main as install_main
 
 
@@ -79,6 +79,12 @@ def main() -> None:
     tiers_parser.add_argument("--provider", choices=["ilaas", "glm52", "openrouter"], required=True)
     tiers_parser.add_argument("--tier", action="append", metavar="tier=slug")
 
+    harness_parser = sub.add_parser("harness", help="Install/inspect the GLM-supervisor + DeepSeek-coder harness (agents, hooks, MCP).")
+    harness_sub = harness_parser.add_subparsers(dest="harness_action", required=True)
+    harness_install = harness_sub.add_parser("install", help="Deploy agents, hooks, and MCP config into the Claude Code config dirs.")
+    harness_install.add_argument("--bin", default=None, help="Path to the codebase-memory-mcp binary. Defaults to $CODEBASE_MEMORY_MCP_BIN, PATH lookup, then ~/.local/bin/codebase-memory-mcp.")
+    harness_sub.add_parser("status", help="Show where the harness artifacts are deployed.")
+
     args = parser.parse_args()
 
     if args.command == "install":
@@ -126,6 +132,23 @@ def main() -> None:
             mapping = None
         counts = tiers.apply(args.provider, mapping)
         print(f"Applied tiers to {args.provider} catalog: {counts}")
+        raise SystemExit(0)
+    elif args.command == "harness":
+        if args.harness_action == "status":
+            print(f"repo source:  {harness.HARNESS_DIR}")
+            print(f"openrouter home: {paths.claude_openrouter_home()}")
+            print(f"claude home:      {paths.home() / '.claude'}")
+            bin_path = harness.codebase_memory_bin()
+            print(f"codebase-memory-mcp: {bin_path or '(not found)'}")
+            raise SystemExit(0)
+        # install
+        deployed = harness.install_harness(bin_path=args.bin)
+        for category, paths_list in deployed.items():
+            if not paths_list:
+                continue
+            print(f"{category}:")
+            for p in paths_list:
+                print(f"  {p}")
         raise SystemExit(0)
     else:
         parser.error("unknown command")

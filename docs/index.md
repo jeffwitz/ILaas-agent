@@ -109,6 +109,7 @@ interfaces
 compatibility
 dependencies
 tiers
+harness
 economy
 models
 codex

@@ -1,0 +1,52 @@
+#!/bin/bash
+# SessionStart hook: remind agent to use codebase-memory-mcp tools.
+# Installed by codebase-memory-mcp. Fires on startup/resume/clear/compact.
+cat << 'REMINDER'
+CRITICAL - Code Discovery Protocol:
+1. ALWAYS use codebase-memory-mcp tools FIRST for ANY code exploration:
+   - search_graph(name_pattern/label/qn_pattern) to find functions/classes/routes
+   - trace_path(function_name, mode=calls|data_flow|cross_service) for call chains
+   - get_code_snippet(qualified_name) for exact symbol source (precise ranges)
+   - query_graph(query) for complex Cypher patterns
+   - get_architecture(aspects) for project structure
+   - search_code(pattern) for text search (graph-augmented grep)
+2. Use Grep/Glob/Read freely for text, configs, non-code files, and
+   always Read a file before editing it.
+3. If a project is not indexed yet, run index_repository FIRST.
+4. PARALLEL SUBAGENT DISPATCH SAFETY (non-negotiable, every session):
+   Before spawning 2+ agents that edit files in the same turn, you MUST
+   use the graph to PROVE the edits cannot conflict — do not dispatch on
+   a human read alone:
+   - For each symbol/identifier an agent will modify, run
+     search_code(pattern=...) to confirm the call sites, and
+     trace_path(function_name, direction=inbound) to list every caller.
+   - Verify no edge (CALLS / USAGE / WRITES) crosses from a point one
+     agent edits toward a point another agent edits. If an edge exists,
+     SERIALIZE those agents (or merge into one) — never parallelize.
+   - Rule of thumb: disjoint files is necessary but NOT sufficient;
+     a caller in file A edited by agent 1 can break if agent 2 changes
+     the callee signature in file B. Check edges, not just paths.
+   AFTER all agents return, re-verify before reporting done:
+   - detect_changes(since=HEAD) to see impacted nodes + propagation.
+   - Re-trace inbound on every modified symbol to confirm callers still
+     resolve (no orphaned refs / broken signatures).
+   - search_code the OLD symbol name to confirm zero stale references.
+   The graph proves structural safety; pytest proves behavioral safety.
+   Use BOTH. Skipping this because "files look disjoint" is the failure
+   mode this protocol exists to prevent.
+5. MCP CONTEXT SYNTHESIS (token economy, every session):
+   Verbose codebase-memory-mcp queries dump several k of JSON into your
+   PERSISTENT context. Delegate them to the `ctx-pro` agent (DeepSeek V4
+   Pro, has read-only MCP tools) so the dump stays in its ephemeral
+   context and only a compact synthesis returns to you. Delegate when the
+   expected output is large (~30+ lines):
+   - detect_changes, get_architecture, trace_path (callers/callees),
+     query_graph, broad search_graph. Ask ctx-pro for the concrete facts
+     (modified files, impacted symbols, caller list, conflict-edge
+     verdict) — it returns a compact table, never the raw dump.
+   Call the MCP tool YOURSELF only for quick targeted lookups (a single
+   search_graph/search_code/get_code_snippet returning a few lines).
+   This keeps the supervisor (GLM 5.2) context small: cheaper caching,
+   less compaction, lower token spend. The point-4 dispatch safety check
+   should itself be routed through ctx-pro.
+REMINDER
