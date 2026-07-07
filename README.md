@@ -309,6 +309,32 @@ python3 scripts/token_economy.py --economy --all \
 config home, so you can run the same report from inside Claude Code. Prices are
 editable at the top of the script. See [docs/economy.md](docs/economy.md).
 
+## The GLM-supervisor / DeepSeek-coder Harness
+
+`openrouter-claude` and `glm52-claude` run a two-layer harness on top of the
+model routing above:
+
+1. **Native tier routing** inside Claude Code — GLM 5.2 supervises (the
+   `opus`/`fable` slots), DeepSeek V4 Pro codes (`sonnet`), and DeepSeek V4
+   Flash handles trivial work (`haiku`). See [docs/tiers.md](docs/tiers.md).
+2. **Subagent delegation** — the GLM 5.2 supervisor delegates coding to the
+   `code-pro` agent (DeepSeek V4 Pro) and verbose graph queries to the
+   `ctx-pro` agent (DeepSeek V4 Pro), so heavy dumps stay out of the
+   supervisor's persistent context.
+
+The harness artifacts — agent definitions, SessionStart/PreToolUse hooks, and
+the `codebase-memory-mcp` server config — are versioned under `harness/` in
+this repo, so a clone reproduces the setup:
+
+```bash
+python3 -m ilaas_agents.cli harness install     # deploy agents + hooks + MCP
+python3 -m ilaas_agents.cli harness status      # show where things are deployed
+```
+
+Then restart Claude Code (or open `/hooks`) so the agents and hooks load. The
+harness is active in every session started by `openrouter-claude` / `glm52-claude`.
+Full details in [docs/harness.md](docs/harness.md).
+
 ## Documentation
 
 Start here:
@@ -318,6 +344,8 @@ docs/index.md
 docs/interfaces.md
 docs/compatibility.md
 docs/dependencies.md
+docs/tiers.md
+docs/harness.md
 docs/codex.md
 docs/claude-code.md
 docs/opencode.md
@@ -326,6 +354,7 @@ docs/economy.md
 docs/troubleshooting.md
 docs/windows.md
 ```
+
 
 Maintainer notes are in [CODEX.md](CODEX.md). The implementation roadmap is in [CdC.md](CdC.md).
 

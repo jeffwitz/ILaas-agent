@@ -1,5 +1,26 @@
 # The GLM-supervisor / DeepSeek-coder harness
 
+## Repository vs Claude Code config — read this first
+
+This repo contains two distinct things, and confusing them is the main
+stumbling block for newcomers:
+
+1. **The Python package `ilaas_agents/`** — the *launchers* (`openrouter-claude`,
+   `glm52-claude`, `Ilaas-claude`, …). They are plain Python programs that start
+   local proxies, set environment variables, and `exec` the real `claude` / `codex`
+   / `opencode` binaries. They live in the repo and are installed by `install.py`.
+2. **The harness** — *Claude Code configuration* (agent definitions, hooks, MCP
+   server config) that tells the `claude` binary how to behave once launched: which
+   subagents exist, what the SessionStart protocol is, which MCP server to load.
+   These are Markdown/YAML/JSON files, not Python.
+
+The harness is **versioned in this repo under `harness/`** but it is *deployed*
+into Claude Code's config directories (`~/.claude_openrouter/`, `~/.claude/`) by
+`ilaas-agents harness install`. A bare `git clone` gives you the source; the
+install command turns it into a live Claude Code setup.
+
+## What the harness does
+
 The `openrouter-claude` (and `glm52-claude`) launchers run a **two-layer harness**:
 
 1. **Native tier routing** inside Claude Code — configured by the launchers (see {doc}`tiers`): GLM 5.2 supervises (opus/fable), DeepSeek V4 Pro codes (sonnet), DeepSeek V4 Flash handles trivial work (haiku).
