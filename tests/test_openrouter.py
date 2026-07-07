@@ -117,7 +117,11 @@ class OpenRouterTest(unittest.TestCase):
         self.assertEqual(env["ANTHROPIC_API_KEY"], "")
         self.assertEqual(env["ANTHROPIC_MODEL"], "z-ai/glm-5.2")
         self.assertEqual(env["CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY"], "1")
-        self.assertEqual(env["ANTHROPIC_DEFAULT_SONNET_MODEL"], "z-ai/glm-5.2")
+        # Tier routing: GLM 5.2 supervises (opus/fable), DeepSeek codes (sonnet/haiku).
+        self.assertEqual(env["ANTHROPIC_DEFAULT_OPUS_MODEL"], "z-ai/glm-5.2")
+        self.assertEqual(env["ANTHROPIC_DEFAULT_FABLE_MODEL"], "z-ai/glm-5.2")
+        self.assertEqual(env["ANTHROPIC_DEFAULT_SONNET_MODEL"], "deepseek/deepseek-v4-pro")
+        self.assertEqual(env["ANTHROPIC_DEFAULT_HAIKU_MODEL"], "deepseek/deepseek-v4-flash")
         self.assertNotIn("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", env)
         manager.cleanup.assert_called_once_with()
 

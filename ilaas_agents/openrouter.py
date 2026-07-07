@@ -17,6 +17,11 @@ from .processes import ProcessManager, foreground_call, python_executable
 
 DEFAULT_CODEX_MODEL = "~openai/gpt-latest"
 DEFAULT_CLAUDE_MODEL = "z-ai/glm-5.2"
+# Tier defaults for Claude Code's native routing: GLM 5.2 supervises (opus/fable),
+# DeepSeek V4 Pro codes (sonnet), DeepSeek V4 Flash handles trivial work (haiku).
+# Overridable per-tier via tiers.resolve (env OPENROUTER_TIER_*_MODEL or catalog).
+DEFAULT_CODER_MODEL = "deepseek/deepseek-v4-pro"
+DEFAULT_SMALL_MODEL = "deepseek/deepseek-v4-flash"
 DEFAULT_OPENCODE_MODEL = "~openai/gpt-latest"
 DEFAULT_OPENAI_BASE_URL = "https://openrouter.ai/api/v1"
 DEFAULT_ANTHROPIC_BASE_URL = "https://openrouter.ai/api"
@@ -242,13 +247,16 @@ def run_claude(argv: list[str]) -> int:
         env["API_TIMEOUT_MS"] = env.get("API_TIMEOUT_MS", "3000000")
         env["CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY"] = "1"
         env.pop("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", None)
-        for variable in (
-            "ANTHROPIC_DEFAULT_OPUS_MODEL",
-            "ANTHROPIC_DEFAULT_SONNET_MODEL",
-            "ANTHROPIC_DEFAULT_HAIKU_MODEL",
-            "ANTHROPIC_DEFAULT_FABLE_MODEL",
-        ):
-            env[variable] = model
+        # Native tier routing: GLM 5.2 supervises (opus/fable), DeepSeek codes
+        # (sonnet) and handles trivial work (haiku). Overridable via tiers.resolve
+        # (env OPENROUTER_TIER_*_MODEL or the openrouter catalog).
+        supervisor = tiers.resolve("openrouter", "supervisor") or model
+        coder = tiers.resolve("openrouter", "coder") or DEFAULT_CODER_MODEL
+        small = tiers.resolve("openrouter", "small") or DEFAULT_SMALL_MODEL
+        env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = supervisor
+        env["ANTHROPIC_DEFAULT_FABLE_MODEL"] = supervisor
+        env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = coder
+        env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = small
         env["CLAUDE_CONFIG_DIR"] = str(paths.claude_openrouter_home())
         env["ANTHROPIC_CUSTOM_MODEL_OPTION"] = model
         env["ANTHROPIC_CUSTOM_MODEL_OPTION_NAME"] = f"OpenRouter {model}"

@@ -12,6 +12,19 @@ Each provider exposes a **tier-map** that picks a concrete model per role, so th
 
 Claude Code and OpenCode already route between their tiers internally depending on the task; Codex has a single model slot, so it runs the `supervisor` model for the whole agentic loop.
 
+### OpenRouter Claude Code defaults
+
+For `openrouter-claude`, the Claude Code tier slots default to a GLM-supervises / DeepSeek-codes split:
+
+| Claude slot | Tier | Default model |
+|---|---|---|
+| `ANTHROPIC_DEFAULT_OPUS_MODEL` | supervisor | `z-ai/glm-5.2` |
+| `ANTHROPIC_DEFAULT_FABLE_MODEL` | supervisor | `z-ai/glm-5.2` |
+| `ANTHROPIC_DEFAULT_SONNET_MODEL` | coder | `deepseek/deepseek-v4-pro` |
+| `ANTHROPIC_DEFAULT_HAIKU_MODEL` | small | `deepseek/deepseek-v4-flash` |
+
+Override any slot with `OPENROUTER_TIER_CODER_MODEL` / `OPENROUTER_TIER_SMALL_MODEL` / `OPENROUTER_TIER_SUPERVISOR_MODEL`, or via `tiers apply`.
+
 ## Where the tier-map lives
 
 The tier is a field **on each catalog entry** (`"tier": "supervisor"`), per provider. There is one catalog per provider:
