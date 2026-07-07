@@ -96,6 +96,18 @@ class OpenRouterTest(unittest.TestCase):
             "z-ai/glm-5.2",
         )
 
+    def test_remove_pinned_openrouter_claude_model_preserves_other_settings(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / ".claude_openrouter"
+            home.mkdir()
+            settings = home / "settings.json"
+            settings.write_text(json.dumps({"model": "claude-openrouter-z-ai/glm-5.2", "theme": "auto"}))
+            with mock.patch("ilaas_agents.openrouter.paths.claude_openrouter_home", return_value=home):
+                openrouter.remove_pinned_openrouter_claude_model()
+            payload = json.loads(settings.read_text())
+        self.assertNotIn("model", payload)
+        self.assertEqual(payload["theme"], "auto")
+
     def test_run_claude_uses_anthropic_skin(self):
         manager = mock.Mock()
         with mock.patch.dict(

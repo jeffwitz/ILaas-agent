@@ -68,6 +68,21 @@ def available_port(host: str = "127.0.0.1") -> int:
         return int(sock.getsockname()[1])
 
 
+def remove_pinned_openrouter_claude_model() -> None:
+    """Remove a saved /model pin that would bypass Claude Code tier routing."""
+    settings = paths.claude_openrouter_home() / "settings.json"
+    if not settings.exists():
+        return
+    try:
+        payload = json.loads(settings.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return
+    if not isinstance(payload, dict) or "model" not in payload:
+        return
+    payload.pop("model", None)
+    settings.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
 def start_claude_proxy(manager: ProcessManager, host: str, port: int) -> None:
     proxy = paths.repo_root() / "proxies" / "openrouter_anthropic_proxy.py"
     manager.start(
@@ -231,6 +246,7 @@ def run_claude(argv: list[str]) -> int:
         list_models(claude=True)
         return 0
 
+    remove_pinned_openrouter_claude_model()
     key = api_key()
     model = claude_model()
     host = "127.0.0.1"
