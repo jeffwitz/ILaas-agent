@@ -32,6 +32,10 @@ They let you use the same ILaaS model catalog from three code-agent tools:
 
 The `glm52-*` commands use the GLM 5.2 API directly, independently of the ILaaS gateway.
 
+> **New here?** Read [docs/quickstart.md](docs/quickstart.md) — a single page that
+> takes you from `git clone` to a verified `openrouter-claude` session with the
+> GLM-supervisor / DeepSeek-coder harness.
+
 ## Quick Start
 
 ```bash

@@ -103,6 +103,7 @@ llama-3.3-70b
 :maxdepth: 2
 :caption: User Guide
 
+quickstart
 ilaas
 openrouter
 interfaces
