@@ -107,7 +107,15 @@ def codex_model() -> str:
 
 
 def claude_model() -> str:
-    return os.environ.get("OPENROUTER_CLAUDE_MODEL", None) or tiers.resolve("openrouter", "supervisor") or DEFAULT_CLAUDE_MODEL
+    # Do NOT read the OpenRouter CODEX catalog here: it is built around the
+    # selected codex model (e.g. ~openai/gpt-latest) and its tier heuristic
+    # would leak that model as the Claude supervisor. Claude's supervisor is
+    # GLM 5.2 by default, overridable via env only.
+    return (
+        os.environ.get("OPENROUTER_CLAUDE_MODEL")
+        or os.environ.get("OPENROUTER_TIER_SUPERVISOR_MODEL")
+        or DEFAULT_CLAUDE_MODEL
+    )
 
 
 def opencode_model() -> str:
@@ -264,11 +272,12 @@ def run_claude(argv: list[str]) -> int:
         env["CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY"] = "1"
         env.pop("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", None)
         # Native tier routing: GLM 5.2 supervises (opus/fable), DeepSeek codes
-        # (sonnet) and handles trivial work (haiku). Overridable via tiers.resolve
-        # (env OPENROUTER_TIER_*_MODEL or the openrouter catalog).
-        supervisor = tiers.resolve("openrouter", "supervisor") or model
-        coder = tiers.resolve("openrouter", "coder") or DEFAULT_CODER_MODEL
-        small = tiers.resolve("openrouter", "small") or DEFAULT_SMALL_MODEL
+        # (sonnet) and handles trivial work (haiku). Env-overridable per tier.
+        # We deliberately do NOT read the OpenRouter codex catalog here: it is
+        # built around the codex selected model and would leak that model.
+        supervisor = os.environ.get("OPENROUTER_TIER_SUPERVISOR_MODEL") or model
+        coder = os.environ.get("OPENROUTER_TIER_CODER_MODEL") or DEFAULT_CODER_MODEL
+        small = os.environ.get("OPENROUTER_TIER_SMALL_MODEL") or DEFAULT_SMALL_MODEL
         env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = supervisor
         env["ANTHROPIC_DEFAULT_FABLE_MODEL"] = supervisor
         env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = coder
