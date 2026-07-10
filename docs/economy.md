@@ -10,6 +10,23 @@ It exists because the saving was previously only theoretical: the tier-map
 ({doc}`tiers`) and the subagent delegation (`ctx-pro` / `code-pro` / `code-flash`)
 are designed to be cheap, but nothing reported the realized number.
 
+## Token economy tools
+
+Beyond the delegation strategy, three tools reduce token consumption operationally:
+
+- **`rtk`** (Rust Token Killer) — a CLI proxy that compresses shell command output.
+  Prefix commands with `rtk` (`rtk git status`, `rtk pytest -q`); use `rtk gain` for
+  cumulative savings; `rtk proxy <cmd>` to bypass. Install at `~/.local/bin/rtk`.
+- **`codebase-memory-mcp`** via the synthesizer agent — offloads verbose graph
+  queries (`detect_changes`, `trace_path`, `get_architecture`) out of the supervisor's
+  persistent context. The agent returns a compact synthesis, never the raw dump.
+  See {doc}`harness` for setup.
+- **`cbm-read-cost-gate`** — a PreToolUse hook on `Read` that warns when the
+  supervisor is about to read a large source file inline (threshold 400 lines,
+  configurable via `$ILAAS_READ_COST_THRESHOLD`). Non-blocking; it prompts the
+  supervisor to delegate the read or use `offset`/`limit`. Deployed automatically
+  by `harness install`.
+
 ## What it reads
 
 Transcripts live under a config home's `projects/` directory:

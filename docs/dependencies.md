@@ -59,3 +59,15 @@ opencode -> npm install -g opencode-ai
 ```
 
 Do not install the npm package named `codex`; it is not the OpenAI Codex CLI. Use `@openai/codex`.
+
+## Optional token-saving tools
+
+These tools are not bundled but are recommended by the harness protocol:
+
+- **`rtk`** (Rust Token Killer) — compresses shell command output to save tokens.
+  Install to `~/.local/bin/rtk`. The harness prints a non-fatal advisory if it is
+  missing during `harness install`.
+- **`codebase-memory-mcp`** — MCP server that provides graph-based code exploration
+  tools. Required by the harness (the install fails without it). The binary is
+  resolved via `$CODEBASE_MEMORY_MCP_BIN` > `which codebase-memory-mcp` >
+  `~/.local/bin/codebase-memory-mcp`.

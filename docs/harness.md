@@ -38,8 +38,9 @@ harness/
     code-pro.md      # DeepSeek V4 Pro, coding tasks
     code-flash.md    # DeepSeek V4 Flash, mechanical/trivial tasks
   hooks/
-    cbm-session-reminder          # SessionStart: Code Discovery Protocol (points 1-6)
+    cbm-session-reminder          # SessionStart: Code Discovery Protocol (points 1-7)
     cbm-code-discovery-gate.template  # PreToolUse: augments Grep/Glob with graph context
+    cbm-read-cost-gate            # PreToolUse on Read: warns on large source files (non-blocking)
   mcp.json.template   # declares the codebase-memory-mcp server
 ```
 
@@ -66,7 +67,10 @@ render from this single source.
 - **`ctx-pro`** — the synthesizer the user asked for: it calls the codebase-memory-mcp tools (`detect_changes`, `get_architecture`, `trace_path`, `query_graph`, `search_graph`) and returns a compact synthesis, never the raw dump. This is what keeps the GLM 5.2 supervisor context small.
 - **`cbm-session-reminder`** — injects the protocol at every session start: (1-3) use the graph first, (4) prove no conflict edge before parallel subagent dispatch, (5) delegate verbose MCP queries to the synthesizer agent, (6) the supervisor must delegate the implementer's work — full-file reads, coding, tests — to the agents in the roster and never do it inline. The roster and supervisor display name are rendered from `hierarchy.json` at install time.
 - **`cbm-code-discovery-gate`** — PreToolUse hook on `Grep|Glob` that augments text search with graph context (never blocks).
+- **`cbm-read-cost-gate`** — PreToolUse hook on `Read` that warns when the supervisor is about to read a large source file inline (threshold 400 lines, configurable via `$ILAAS_READ_COST_THRESHOLD`). Non-blocking (always approves). Skips test files, non-source extensions, and small files silently.
 - **`mcp.json`** — declares the `codebase-memory-mcp` server so its tools are available to the supervisor and to `ctx-pro`.
+
+`rtk` (Rust Token Killer) is a recommended companion tool — it compresses shell command output to save tokens (`rtk gain` for analytics, `rtk proxy <cmd>` to bypass). It is not bundled with the harness but is referenced in the session reminder protocol.
 
 ## Install
 

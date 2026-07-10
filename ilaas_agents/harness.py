@@ -129,6 +129,59 @@ def _ensure_symlink(link: Path, target: Path) -> bool:
     return True
 
 
+def _ensure_pre_tool_use_matcher(
+    settings_path: Path, matcher: str, command: str, timeout: int = 5,
+) -> bool:
+    """Idempotently add a PreToolUse matcher entry to a settings.json file.
+
+    Returns True if the matcher was added; False if it already existed or the
+    settings file is missing/invalid.
+    """
+    if not settings_path.is_file():
+        return False
+    try:
+        data = json.loads(settings_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return False
+    if not isinstance(data, dict):
+        return False
+    data.setdefault("hooks", {})
+    hooks = data["hooks"]
+    if not isinstance(hooks, dict):
+        return False
+    hooks.setdefault("PreToolUse", [])
+    pre = hooks["PreToolUse"]
+    if not isinstance(pre, list):
+        return False
+    for entry in pre:
+        if isinstance(entry, dict) and entry.get("matcher") == matcher:
+            return False  # already present
+    pre.append({
+        "matcher": matcher,
+        "hooks": [
+            {"type": "command", "command": command, "timeout": timeout},
+        ],
+    })
+    settings_path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    return True
+
+
+def rtk_bin() -> str | None:
+    """Resolve the rtk (Rust Token Killer) binary path.
+
+    Precedence: $RTK_BIN > PATH lookup > ~/.local/bin/rtk.
+    Returns None if not found.
+    """
+    configured = os.environ.get("RTK_BIN")
+    if configured:
+        return configured
+    found = shutil.which("rtk")
+    if found:
+        return found
+    default = paths.home() / ".local" / "bin" / "rtk"
+    return str(default) if default.exists() else None
+
+
 def install_harness(
     openrouter_home: Path | None = None,
     claude_home: Path | None = None,
@@ -195,6 +248,20 @@ def install_harness(
     or_hooks = openrouter_home / "hooks"
     if _ensure_symlink(or_hooks, hooks_dst):
         deployed["symlinks"].append(f"{or_hooks} -> {hooks_dst}")
+
+    # Register the Read cost-gate as a PreToolUse matcher in both settings.json.
+    read_hook_command = str(hooks_dst / "cbm-read-cost-gate")
+    deployed.setdefault("settings", [])
+    for sp in (claude_home / "settings.json", openrouter_home / "settings.json"):
+        if _ensure_pre_tool_use_matcher(sp, "Read", read_hook_command):
+            deployed["settings"].append(str(sp))
+
+    # Advise if rtk is not installed (non-fatal).
+    if rtk_bin() is None:
+        print(
+            "rtk (Rust Token Killer) not found; install it to compress shell "
+            "command output and save tokens (rtk gain for analytics)."
+        )
 
     # MCP config -> ~/.claude/.mcp.json, symlinked from the openrouter home.
     mcp_template = HARNESS_DIR / "mcp.json.template"

@@ -69,4 +69,14 @@ CRITICAL - Code Discovery Protocol:
 
    Roster:
 __ROSTER__
+7. TOKEN ECONOMY TOOLS (every session):
+   (a) rtk — prefix shell commands with `rtk` to compress output and save
+       tokens (`rtk git status`, `rtk pytest -q`). Use `rtk gain` to see
+       cumulative savings. Bypass with `rtk proxy <cmd>` when you need
+       raw output.
+   (b) codebase-memory-mcp via the synthesizer agent — offloads verbose
+       graph queries out of the supervisor context (see points 1 and 5).
+   (c) Read cost-gate — the PreToolUse hook on `Read` warns when you are
+       about to read a large source file inline. Delegate the read or
+       limit it to the relevant range.
 REMINDER

@@ -1,0 +1,39 @@
+#!/bin/bash
+# PreToolUse hook: warn when Read is called on a large source file.
+# Non-blocking — always approves, never blocks. Silent exit 0 on
+# non-source files, test files, small files, or missing jq.
+set -euo pipefail
+
+command -v jq &>/dev/null || exit 0
+
+THRESHOLD=${ILAAS_READ_COST_THRESHOLD:-400}
+
+file_path=$(jq -r '.tool_input.file_path // empty' 2>/dev/null || true)
+if [ -z "$file_path" ]; then
+    exit 0
+fi
+
+if [ ! -f "$file_path" ]; then
+    exit 0
+fi
+
+# Exclude test files.
+if [[ "$file_path" =~ /(tests?|test)/ ]] || [[ "$file_path" =~ _test\. ]] || [[ "$file_path" =~ \.test\. ]]; then
+    exit 0
+fi
+
+# Exclude non-source file extensions.
+ext="${file_path##*.}"
+case "$ext" in
+    py|ts|rs|go|java|js|tsx|jsx|rb|swift|kt|scala|cpp|c|h|hpp) ;;
+    *) exit 0 ;;
+esac
+
+lines=$(wc -l < "$file_path" 2>/dev/null || echo 0)
+if [ "$lines" -le "$THRESHOLD" ]; then
+    exit 0
+fi
+
+cat <<EOF
+{"decision":"approve","additionalContext":"WARNING: ${file_path} is ${lines} lines. Reading it inline costs __SUPERVISOR_DISPLAY__ supervisor context. Delegate to the synthesizer agent (see roster) or read only the relevant range with offset/limit."}
+EOF
