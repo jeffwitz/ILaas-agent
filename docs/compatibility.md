@@ -71,6 +71,8 @@ Unterminated string starting at ...
 
 For Qwen requests with tools, the Codex and Claude proxies retry once with an extra instruction requiring complete valid JSON tool arguments. If the retry also fails, the upstream error is returned.
 
+The retry rules are declarative and shared by both proxies in `proxies/retry_policy.py`: a rule matches by model prefix, whether the request carries tools, and an error-body substring. The default table holds only the Qwen rule above; override or extend it by writing a JSON list of rule objects to `~/.config/ilaas-agent/retry-policies.json` (keys: `model_prefix`, `requires_tools`, `error_substring`, `corrective_message`). Each request retries at most once, and the retry is logged with the model and trigger.
+
 ## Codex Sandbox
 
 The installer writes a Codex sandbox mode to `~/.codex-ilaas/config.toml`.

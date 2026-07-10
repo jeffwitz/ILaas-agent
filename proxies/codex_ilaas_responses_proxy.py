@@ -12,6 +12,11 @@ import urllib.request
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+try:
+    from proxies import retry_policy
+except ImportError:  # running as a standalone script (proxies/ not on path)
+    import retry_policy
+
 
 SERVICE_NAME = "ilaas-codex-responses-proxy"
 # Connect to upstream once; then allow up to IDLE_TIMEOUT seconds between
@@ -228,20 +233,6 @@ class ProxyHandler(BaseHTTPRequestHandler):
             chat_payload["tool_choice"] = "auto"
         return chat_payload
 
-    def retry_payload_for_qwen(self, chat_payload):
-        retry_payload = dict(chat_payload)
-        retry_payload["messages"] = [
-            {
-                "role": "system",
-                "content": (
-                    "When calling tools, function arguments must be a complete valid JSON object. "
-                    "Do not emit unterminated strings."
-                ),
-            },
-            *chat_payload["messages"],
-        ]
-        return retry_payload
-
     def call_chat_completions(self, payload):
         chat_payload = self.build_chat_payload(payload, stream=False)
         headers = {
@@ -251,8 +242,10 @@ class ProxyHandler(BaseHTTPRequestHandler):
         try:
             return self.post_chat_completion(chat_payload, headers)
         except UpstreamHTTPError as error:
-            if self.should_retry_qwen_tool_json_error(chat_payload, error.body):
-                return self.post_chat_completion(self.retry_payload_for_qwen(chat_payload), headers)
+            rule = retry_policy.match(chat_payload, error.body)
+            if rule:
+                print(f"codex proxy: retrying {chat_payload.get('model')} (trigger: {rule.get('error_substring')})", flush=True)
+                return self.post_chat_completion(retry_policy.retry_payload(chat_payload, rule), headers)
             raise
 
     def post_chat_completion(self, chat_payload, headers):
@@ -268,14 +261,6 @@ class ProxyHandler(BaseHTTPRequestHandler):
         except urllib.error.HTTPError as error:
             body = error.read().decode("utf-8", errors="replace")
             raise UpstreamHTTPError(error.code, body) from error
-
-    def should_retry_qwen_tool_json_error(self, chat_payload, body):
-        model = str(chat_payload.get("model", ""))
-        return (
-            model.startswith("qwen-")
-            and bool(chat_payload.get("tools"))
-            and "Unterminated string" in body
-        )
 
     def write_chunked(self, chunk):
         self.wfile.write(f"{len(chunk):X}\r\n".encode("ascii"))
@@ -317,9 +302,11 @@ class ProxyHandler(BaseHTTPRequestHandler):
         try:
             conn, response = self.upstream_stream("/chat/completions", chat_payload)
         except UpstreamHTTPError as error:
-            if self.should_retry_qwen_tool_json_error(chat_payload, error.body):
+            rule = retry_policy.match(chat_payload, error.body)
+            if rule:
+                print(f"codex proxy: retrying {chat_payload.get('model')} (trigger: {rule.get('error_substring')})", flush=True)
                 try:
-                    conn, response = self.upstream_stream("/chat/completions", self.retry_payload_for_qwen(chat_payload))
+                    conn, response = self.upstream_stream("/chat/completions", retry_policy.retry_payload(chat_payload, rule))
                 except UpstreamHTTPError as err2:
                     print(f"upstream HTTP {err2.code}: {err2.body[:2000]}", flush=True)
                     self.send_json(err2.code, {"error": err2.body})

@@ -12,6 +12,11 @@ import urllib.request
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+try:
+    from proxies import retry_policy
+except ImportError:  # running as a standalone script (proxies/ not on path)
+    import retry_policy
+
 
 MODEL_PREFIX = "claude-ilaas-"
 DEFAULT_MODEL = "ilaas-default"
@@ -354,36 +359,16 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 pass
         return chat_payload
 
-    def retry_payload_for_qwen(self, chat_payload):
-        retry_payload = dict(chat_payload)
-        retry_payload["messages"] = [
-            {
-                "role": "system",
-                "content": (
-                    "When calling tools, function arguments must be a complete valid JSON object. "
-                    "Do not emit unterminated strings."
-                ),
-            },
-            *chat_payload["messages"],
-        ]
-        return retry_payload
-
     def call_chat_completions(self, payload):
         chat_payload = self.build_chat_payload(payload, stream=False)
         try:
             return self.upstream_json("/chat/completions", chat_payload)
         except UpstreamHTTPError as error:
-            if self.should_retry_qwen_tool_json_error(chat_payload, error.body):
-                return self.upstream_json("/chat/completions", self.retry_payload_for_qwen(chat_payload))
+            rule = retry_policy.match(chat_payload, error.body)
+            if rule:
+                print(f"claude proxy: retrying {chat_payload.get('model')} (trigger: {rule.get('error_substring')})", flush=True)
+                return self.upstream_json("/chat/completions", retry_policy.retry_payload(chat_payload, rule))
             raise
-
-    def should_retry_qwen_tool_json_error(self, chat_payload, body):
-        model = str(chat_payload.get("model", ""))
-        return (
-            model.startswith("qwen-")
-            and bool(chat_payload.get("tools"))
-            and "Unterminated string" in body
-        )
 
     def write_anthropic_result(self, request_payload, chat_response):
         response_id = "msg_" + uuid.uuid4().hex
@@ -449,9 +434,11 @@ class ProxyHandler(BaseHTTPRequestHandler):
         try:
             conn, response = self.upstream_stream("/chat/completions", chat_payload)
         except UpstreamHTTPError as error:
-            if self.should_retry_qwen_tool_json_error(chat_payload, error.body):
+            rule = retry_policy.match(chat_payload, error.body)
+            if rule:
+                print(f"claude proxy: retrying {chat_payload.get('model')} (trigger: {rule.get('error_substring')})", flush=True)
                 try:
-                    conn, response = self.upstream_stream("/chat/completions", self.retry_payload_for_qwen(chat_payload))
+                    conn, response = self.upstream_stream("/chat/completions", retry_policy.retry_payload(chat_payload, rule))
                 except UpstreamHTTPError as err2:
                     print(f"upstream HTTP {err2.code}: {err2.body[:2000]}", flush=True)
                     self.send_json(err2.code, {"error": {"type": "api_error", "message": err2.body}})
