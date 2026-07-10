@@ -75,7 +75,7 @@ def main() -> None:
     smoke.add_parser(sub)
 
     tiers_parser = sub.add_parser("tiers", help="Manage tier-to-model mappings per provider.")
-    tiers_parser.add_argument("action", choices=["list", "suggest", "apply"])
+    tiers_parser.add_argument("action", choices=["list", "suggest", "apply", "show"])
     tiers_parser.add_argument("--provider", choices=["ilaas", "glm52", "openrouter"], required=True)
     tiers_parser.add_argument("--tier", action="append", metavar="tier=slug")
 
@@ -109,6 +109,12 @@ def main() -> None:
                 resolved = tiers.resolve(args.provider, tier)
                 print(f"{args.provider} {tier}: {resolved or '(unset)'}")
             print(f"catalog: {tiers.catalog_path(args.provider)}")
+            raise SystemExit(0)
+        if args.action == "show":
+            for tier in tiers.TIERS:
+                slug, source = tiers.resolve_with_source(args.provider, tier)
+                print(f"{args.provider} {tier}: {slug or '(unset)'}  [source: {source}]")
+            print(f"catalog: {tiers.catalog_path(args.provider)}  [source: {tiers.catalog_source(args.provider)}]")
             raise SystemExit(0)
         if args.action == "suggest":
             mapping = tiers.suggest(args.provider)

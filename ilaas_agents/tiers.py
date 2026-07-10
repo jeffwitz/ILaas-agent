@@ -22,6 +22,56 @@ from . import paths
 TIERS = ("supervisor", "coder", "small")
 
 
+def active_catalog_path() -> Path:
+    """State file recording which openrouter-<slug>.json the launcher selected."""
+    return paths.cache_home() / paths.APP_NAME / "openrouter-active.json"
+
+
+def set_active_catalog(provider: str, catalog: Path) -> None:
+    """Record the catalog the launcher selected (openrouter only).
+
+    Replaces the implicit most-recent-mtime selection with an explicit,
+    inspectable state file (B4).
+    """
+    if provider != "openrouter":
+        return
+    state = active_catalog_path()
+    state.parent.mkdir(parents=True, exist_ok=True)
+    payload = {"catalog": str(catalog)}
+    try:
+        state.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _openrouter_catalog_path() -> Path:
+    override = os.environ.get("OPENROUTER_TIER_CATALOG")
+    if override:
+        return Path(override)
+    directory = paths.cache_home() / paths.APP_NAME
+    state = active_catalog_path()
+    if state.is_file():
+        try:
+            payload = json.loads(state.read_text(encoding="utf-8"))
+            catalog = Path(payload.get("catalog") or "")
+            if catalog.is_file():
+                return catalog
+        except (OSError, json.JSONDecodeError):
+            pass
+    # Backward-compat fallback: adopt the most-recently-written catalog into
+    # the state file so future reads are explicit rather than mtime-based.
+    if directory.is_dir():
+        candidates = sorted(
+            directory.glob("openrouter-*.json"),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+        if candidates:
+            set_active_catalog("openrouter", candidates[0])
+            return candidates[0]
+    return directory / "openrouter-tiers.json"
+
+
 def catalog_path(provider: str) -> Path:
     """Locate the catalog that carries tier info for ``provider``."""
     if provider == "ilaas":
@@ -30,22 +80,32 @@ def catalog_path(provider: str) -> Path:
     if provider == "glm52":
         return paths.cache_home() / paths.APP_NAME / "glm52-model-catalog.json"
     if provider == "openrouter":
-        override = os.environ.get("OPENROUTER_TIER_CATALOG")
-        if override:
-            return Path(override)
-        directory = paths.cache_home() / paths.APP_NAME
-        if directory.is_dir():
-            # OpenRouter catalogs are per-selected-model (openrouter-<slug>.json);
-            # pick the most recently written one as the active tier source.
-            candidates = sorted(
-                directory.glob("openrouter-*.json"),
-                key=lambda p: p.stat().st_mtime,
-                reverse=True,
-            )
-            if candidates:
-                return candidates[0]
-        return directory / "openrouter-tiers.json"
+        return _openrouter_catalog_path()
     raise SystemExit(f"unknown provider: {provider}. Expected one of: ilaas, glm52, openrouter.")
+
+
+def catalog_source(provider: str) -> str:
+    """Human-readable description of how catalog_path chose the catalog."""
+    if provider == "ilaas":
+        return "env ILAAS_MODEL_CATALOG" if os.environ.get("ILAAS_MODEL_CATALOG") else "paths.model_catalog_path()"
+    if provider == "glm52":
+        return "cache glm52-model-catalog.json"
+    if provider == "openrouter":
+        if os.environ.get("OPENROUTER_TIER_CATALOG"):
+            return "env OPENROUTER_TIER_CATALOG"
+        state = active_catalog_path()
+        if state.is_file():
+            try:
+                payload = json.loads(state.read_text(encoding="utf-8"))
+                if Path(payload.get("catalog") or "").is_file():
+                    return "active state file"
+            except (OSError, json.JSONDecodeError):
+                pass
+        directory = paths.cache_home() / paths.APP_NAME
+        if directory.is_dir() and list(directory.glob("openrouter-*.json")):
+            return "mtime fallback (adopted into state file)"
+        return "default openrouter-tiers.json"
+    return "unknown"
 
 
 def load(provider: str) -> list[dict]:
@@ -76,6 +136,24 @@ def resolve(provider: str, tier: str) -> str | None:
         if model.get("tier") == tier and model.get("slug"):
             return model["slug"]
     return None
+
+
+def resolve_with_source(provider: str, tier: str) -> tuple[str | None, str]:
+    """Like resolve, but also return how the slug was chosen (for `tiers show`)."""
+    if tier not in TIERS:
+        raise SystemExit(f"unknown tier: {tier}. Expected one of: {', '.join(TIERS)}.")
+    env_name = f"{provider.upper()}_TIER_{tier.upper()}_MODEL"
+    override = os.environ.get(env_name)
+    if override:
+        return override, f"env {env_name}"
+    try:
+        models = load(provider)
+    except SystemExit:
+        return None, "no catalog"
+    for model in models:
+        if model.get("tier") == tier and model.get("slug"):
+            return model["slug"], "catalog"
+    return None, "unset"
 
 
 def assign_tier(provider: str, slug: str, metadata: dict | None = None) -> str:

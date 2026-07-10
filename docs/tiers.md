@@ -35,6 +35,8 @@ glm52       -> <cache>/ilaas-code-agents/glm52-model-catalog.json
 openrouter  -> <cache>/ilaas-code-agents/openrouter-<slug>.json   ($OPENROUTER_TIER_CATALOG)
 ```
 
+For OpenRouter the catalog is per selected model (`openrouter-<slug>.json`). The launcher records which one is active in an explicit state file `<cache>/ilaas-code-agents/openrouter-active.json` (`{"catalog": "<path>"}`) when `openrouter-codex` runs with a selected model. Resolution order for the OpenRouter catalog is: `$OPENROUTER_TIER_CATALOG` env > the active state file > the most-recently-written `openrouter-*.json` (adopted into the state file on first read) > the `openrouter-tiers.json` default. Inspect the chosen catalog and its source with `tiers show`.
+
 When no tier is configured, every launcher falls back to its existing hardcoded default — enabling tiers is opt-in and never changes default behavior.
 
 ## Resolve precedence
@@ -44,6 +46,8 @@ For a given `(provider, tier)`, `tiers.resolve` checks, in order:
 1. Environment variable `{PROVIDER}_TIER_{TIER}_MODEL` — e.g. `ILAAS_TIER_SUPERVISOR_MODEL`, `OPENROUTER_TIER_CODER_MODEL`.
 2. The first catalog entry whose `tier` field matches.
 3. `None` → the caller falls back to its provider default.
+
+`tiers show --provider <p>` prints each resolved tier slug together with its source (`env` / `catalog` / `unset`) and the resolved catalog path with its own source.
 
 ## Manage tiers from the CLI
 

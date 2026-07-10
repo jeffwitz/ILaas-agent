@@ -97,5 +97,69 @@ class TiersTest(unittest.TestCase):
         self.assertIsNone(tiers.resolve("nope", "supervisor"))
 
 
+class OpenRouterActiveCatalogTest(unittest.TestCase):
+    def _cache_env(self, tmp):
+        return {"ILAAS_CACHE_HOME": str(Path(tmp) / "cache"), "OPENROUTER_TIER_CATALOG": ""}
+
+    def test_state_file_is_authoritative(self):
+        catalog_payload = {"models": [{"slug": "z-ai/glm-5.2", "tier": "supervisor"}]}
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.dict(os.environ, self._cache_env(tmp), clear=False):
+                cat_dir = tiers.paths.cache_home() / tiers.paths.APP_NAME
+                cat_dir.mkdir(parents=True)
+                cat = cat_dir / "openrouter-glm-5.2.json"
+                cat.write_text(json.dumps(catalog_payload))
+                tiers.set_active_catalog("openrouter", cat)
+                self.assertEqual(tiers.catalog_path("openrouter"), cat)
+                self.assertIn("active state file", tiers.catalog_source("openrouter"))
+                self.assertEqual(tiers.resolve("openrouter", "supervisor"), "z-ai/glm-5.2")
+
+    def test_env_override_beats_state_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.dict(os.environ, self._cache_env(tmp), clear=False):
+                cat_dir = tiers.paths.cache_home() / tiers.paths.APP_NAME
+                cat_dir.mkdir(parents=True)
+                state_cat = cat_dir / "openrouter-state.json"
+                state_cat.write_text("{}")
+                tiers.set_active_catalog("openrouter", state_cat)
+                env_cat = cat_dir / "openrouter-env.json"
+                env_cat.write_text("{}")
+                with mock.patch.dict(os.environ, {"OPENROUTER_TIER_CATALOG": str(env_cat)}):
+                    self.assertEqual(tiers.catalog_path("openrouter"), env_cat)
+                    self.assertIn("env", tiers.catalog_source("openrouter"))
+
+    def test_mtime_fallback_adopts_newest_into_state(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.dict(os.environ, self._cache_env(tmp), clear=False):
+                cat_dir = tiers.paths.cache_home() / tiers.paths.APP_NAME
+                cat_dir.mkdir(parents=True)
+                a = cat_dir / "openrouter-a.json"
+                b = cat_dir / "openrouter-b.json"
+                a.write_text("{}")
+                b.write_text("{}")
+                os.utime(a, (1, 1))
+                os.utime(b, (10, 10))
+                # before any catalog_path call, source is the mtime fallback
+                self.assertIn("mtime fallback", tiers.catalog_source("openrouter"))
+                self.assertEqual(tiers.catalog_path("openrouter"), b)
+                state = tiers.active_catalog_path()
+                self.assertTrue(state.is_file())
+                self.assertEqual(Path(json.loads(state.read_text())["catalog"]), b)
+
+    def test_resolve_with_source_env_and_catalog(self):
+        catalog = {"models": [{"slug": "model-supervisor", "tier": "supervisor"}]}
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "catalog.json"
+            path.write_text(json.dumps(catalog))
+            with mock.patch.dict(os.environ, {"ILAAS_MODEL_CATALOG": str(path)}):
+                slug, source = tiers.resolve_with_source("ilaas", "supervisor")
+                self.assertEqual(slug, "model-supervisor")
+                self.assertEqual(source, "catalog")
+            with mock.patch.dict(os.environ, {"ILAAS_MODEL_CATALOG": str(path), "ILAAS_TIER_SUPERVISOR_MODEL": "env-model"}):
+                slug, source = tiers.resolve_with_source("ilaas", "supervisor")
+                self.assertEqual(slug, "env-model")
+                self.assertIn("env", source)
+
+
 if __name__ == "__main__":
     unittest.main()

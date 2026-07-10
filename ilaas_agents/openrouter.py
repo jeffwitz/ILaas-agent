@@ -226,6 +226,7 @@ def run_codex(argv: list[str]) -> int:
 
     model = selected_codex_model(argv)
     catalog = codex_catalog_path(model)
+    tiers.set_active_catalog("openrouter", catalog)
     env = os.environ.copy()
     env["OPENROUTER_API_KEY"] = api_key()
     # Isolate from the user's real Codex (~/.codex): otherwise Codex picks up a
