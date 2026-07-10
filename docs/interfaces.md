@@ -15,6 +15,26 @@ Agent CLI
   -> ILaaS
 ```
 
+## Architecture at a glance
+
+```text
+                          ILaaS path (persistent)                 direct API paths (per-session)
+          ┌────────────────────────────────────────────┐   ┌─────────────────────────────────────┐
+          │ LiteLLM gateway   127.0.0.1:4000  (persist)│   │ GLM 5.2 Z.AI        api.z.ai        │
+          │   ├─ Codex Responses proxy  4001 (session) │   │ OpenRouter          openrouter.ai  │
+          │   │    Codex CLI ──>/v1/responses           │   │   └─ Anthropic proxy 4012 (session)│
+          │   ├─ Claude Messages proxy 4002 (session)  │   │        Claude Code ──>/v1/messages  │
+          │   │    Claude Code ──>/v1/messages          │   │                                     │
+          │   └─ OpenCode ──>/v1/chat/completions       │   │ OpenCode ──> provider (glm52|openr) │
+          └────────────────────────────────────────────┘   └─────────────────────────────────────┘
+```
+
+- **Persistent**: `Ilaas-servers` keeps the LiteLLM gateway on port `4000` across sessions; it is the only long-lived service and the only one that holds the ILaaS key at runtime.
+- **Per-session**: the `4001` Responses, `4002` Messages, and `4012` OpenRouter-Anthropic proxies are started on demand by the matching launcher and stopped when it exits. The GLM 5.2 and OpenRouter direct paths talk to the provider over HTTPS with no local gateway.
+- `Ilaas-doctor` checks all four ports and the resolved key sources; see {doc}`troubleshooting` for the local security model.
+
+## Why LiteLLM
+
 ## Why LiteLLM
 
 LiteLLM provides one local OpenAI-compatible endpoint and one model registry. The generated LiteLLM config contains every ILaaS model exposed by `/v1/models`, plus stable aliases:

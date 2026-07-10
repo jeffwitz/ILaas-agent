@@ -360,7 +360,7 @@ docs/windows.md
 ```
 
 
-Maintainer notes are in [CODEX.md](CODEX.md). The implementation roadmap is in [CdC.md](CdC.md).
+Maintainer notes are in [CODEX.md](CODEX.md). The initial-build record is in [CdC.md](CdC.md) (a short pointer to `docs/history.md` and the living improvement plan `CdC-ilaas-agent-v2.md`).
 
 The online documentation is configured for Read the Docs with `.readthedocs.yaml`, `docs/conf.py`, and the Read the Docs Sphinx theme. To publish it, import this GitHub repository in Read the Docs; the build uses `docs/requirements.txt`.
 

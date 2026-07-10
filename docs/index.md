@@ -124,6 +124,6 @@ windows
 :maxdepth: 1
 :caption: Project Notes
 
-requirements-plan
 maintainer-notes
+history
 ```
