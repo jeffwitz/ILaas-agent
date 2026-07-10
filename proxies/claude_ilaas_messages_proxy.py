@@ -109,7 +109,8 @@ def chat_messages_from_anthropic(payload):
         if text:
             system_parts.append(text)
 
-    system_parts.append(selected_model_instruction)
+    if os.environ.get("ILAAS_INJECT_MODEL_IDENTITY", "1") != "0":
+        system_parts.append(selected_model_instruction)
 
     for item in payload.get("messages", []):
         if not isinstance(item, dict):

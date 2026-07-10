@@ -49,12 +49,14 @@ def text_from_content(content):
 def chat_messages_from_responses(payload):
     messages = []
     selected_model = payload.get("model", "ilaas-default")
-    system_parts = [
-        "Selected ILaaS model slug: "
-        + str(selected_model)
-        + ". If asked which model is selected, answer with this slug. "
-        + "Do not claim to be Mistral unless the selected model slug starts with mistral or is the legacy alias mistral-ilaas."
-    ]
+    system_parts = []
+    if os.environ.get("ILAAS_INJECT_MODEL_IDENTITY", "1") != "0":
+        system_parts.append(
+            "Selected ILaaS model slug: "
+            + str(selected_model)
+            + ". If asked which model is selected, answer with this slug. "
+            + "Do not claim to be Mistral unless the selected model slug starts with mistral or is the legacy alias mistral-ilaas."
+        )
     instructions = payload.get("instructions")
     if isinstance(instructions, str) and instructions.strip():
         system_parts.append(instructions)

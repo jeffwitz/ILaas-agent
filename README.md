@@ -174,7 +174,7 @@ Claude Code: /model
 OpenCode:    /models
 ```
 
-Codex and Claude Code receive a filtered catalog of OpenRouter text models that support tools. OpenCode uses its built-in OpenRouter catalog. After selecting a model, the bridge preserves the exact OpenRouter slug sent upstream; Codex and Claude also receive an explicit runtime identity instruction for accurate model-identification answers.
+Codex and Claude Code receive a filtered catalog of OpenRouter text models that support tools. OpenCode uses its built-in OpenRouter catalog. After selecting a model, the bridge preserves the exact OpenRouter slug sent upstream; Codex and Claude also receive an explicit runtime identity instruction for accurate model-identification answers. That instruction is on by default and can be disabled with `ILAAS_INJECT_MODEL_IDENTITY=0` (it costs a small amount of context per request).
 
 ## Install Missing Agent CLIs
 

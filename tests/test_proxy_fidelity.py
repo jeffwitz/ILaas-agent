@@ -1,6 +1,9 @@
+import os
 import unittest
+from unittest import mock
 
 from proxies import claude_ilaas_messages_proxy as claude_proxy
+from proxies import codex_ilaas_responses_proxy as codex_proxy
 
 
 class ToolChoiceMappingTest(unittest.TestCase):
@@ -74,6 +77,30 @@ class MaxTokensClampTest(unittest.TestCase):
 
     def test_default_max_tokens_is_8192(self):
         self.assertGreaterEqual(claude_proxy.MAX_OUTPUT_TOKENS, 8192)
+
+
+class IdentityInjectionOptOutTest(unittest.TestCase):
+    def test_claude_injection_default_on(self):
+        messages = claude_proxy.chat_messages_from_anthropic(
+            {"model": "claude-ilaas-qwen-3.6-35b-instruct", "messages": [{"role": "user", "content": "hi"}]}
+        )
+        self.assertEqual(messages[0]["role"], "system")
+        self.assertIn("Selected ILaaS model slug", messages[0]["content"])
+
+    def test_claude_injection_disabled(self):
+        with mock.patch.dict(os.environ, {"ILAAS_INJECT_MODEL_IDENTITY": "0"}):
+            messages = claude_proxy.chat_messages_from_anthropic(
+                {"model": "claude-ilaas-qwen-3.6-35b-instruct", "messages": [{"role": "user", "content": "hi"}]}
+            )
+        # no system message at all when identity injection is off and no other system content
+        self.assertTrue(all(m["role"] != "system" for m in messages))
+
+    def test_codex_injection_disabled(self):
+        with mock.patch.dict(os.environ, {"ILAAS_INJECT_MODEL_IDENTITY": "0"}):
+            messages = codex_proxy.chat_messages_from_responses(
+                {"model": "qwen-3.6-35b-instruct", "input": [{"role": "user", "content": [{"type": "input_text", "text": "hi"}]}]}
+            )
+        self.assertTrue(all(m["role"] != "system" for m in messages))
 
 
 if __name__ == "__main__":

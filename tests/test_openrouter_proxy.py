@@ -1,4 +1,6 @@
+import os
 import unittest
+from unittest import mock
 
 from proxies.openrouter_anthropic_proxy import anthropic_models, inject_model_identity
 
@@ -37,6 +39,12 @@ class OpenRouterAnthropicProxyTest(unittest.TestCase):
         self.assertEqual(result["model"], "z-ai/glm-5.2")
         self.assertEqual(result["system"][0]["text"], "Original")
         self.assertIn("answer exactly 'z-ai/glm-5.2'", result["system"][1]["text"])
+
+    def test_inject_model_identity_disabled_strips_prefix_only(self):
+        with mock.patch.dict(os.environ, {"ILAAS_INJECT_MODEL_IDENTITY": "0"}):
+            result = inject_model_identity({"model": "claude-openrouter-z-ai/glm-5.2", "system": "Original"})
+        self.assertEqual(result["model"], "z-ai/glm-5.2")
+        self.assertEqual(result["system"], "Original")
 
 
 if __name__ == "__main__":

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
@@ -56,17 +57,24 @@ def anthropic_models(payload: dict) -> dict:
     }
 
 
+def identity_injection_enabled() -> bool:
+    """Whether to inject the model-identity system instruction (C3). Default on."""
+    return os.environ.get("ILAAS_INJECT_MODEL_IDENTITY", "1") != "0"
+
+
 def inject_model_identity(payload: dict) -> dict:
     model = payload.get("model")
     if not isinstance(model, str) or not model:
         return payload
     actual_model = upstream_model_id(model)
+    updated = dict(payload)
+    updated["model"] = actual_model  # strip the discovery prefix regardless
+    if not identity_injection_enabled():
+        return updated
     instruction = (
         f"The active API model is OpenRouter model '{actual_model}'. If asked which model is active, "
         f"answer exactly '{actual_model}' and do not infer another identity."
     )
-    updated = dict(payload)
-    updated["model"] = actual_model
     system = updated.get("system")
     if isinstance(system, str):
         updated["system"] = f"{system}\n\n{instruction}"
