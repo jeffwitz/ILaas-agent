@@ -53,10 +53,20 @@ Flags:
 
 ## Pricing
 
-Prices are editable at the top of the script (USD per 1M tokens):
+Prices are USD per 1M tokens. The defaults are embedded in `scripts/token_economy.py` (`DEFAULT_PRICE_ENTRIES` and `DEFAULT_BASELINE`) and can be overridden **without editing code** by writing a JSON file to `~/.config/ilaas-agent/prices.json`:
 
-- `PRICES` — `(input, cache_read, output)` per model, matched by regex.
-- `BASELINE_PRICE` / `BASELINE_NAME` — the "basic strategy" reference (default: Opus alone, no delegation, no ILaaS tier).
+```json
+{
+  "baseline": {"input": 15.0, "cache_read": 1.50, "output": 75.0, "name": "Opus seul"},
+  "prices": [
+    {"pattern": "glm-5\\.2|glm5\\.2", "input": 0.93, "cache_read": 0.93, "output": 3.00},
+    {"pattern": "claude-opus",        "input": 15.0, "cache_read": 1.50, "output": 75.0}
+  ]
+}
+```
+
+- `prices` — a list of `{pattern, input, cache_read, output}` per model, matched by regex; first match wins. A bare JSON list is also accepted (prices only, default baseline).
+- `baseline` — the "basic strategy" reference (default: Opus alone, no delegation, no ILaaS tier).
 
 `cache_read` defaults to the input rate when a provider's cache-hit discount is
 unknown; lower it if your provider bills cached reads more cheaply. Because the

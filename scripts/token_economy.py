@@ -23,6 +23,7 @@ import glob
 import json
 import os
 import re
+import sys
 from collections import defaultdict
 from pathlib import Path
 
@@ -43,24 +44,62 @@ ROLE_PATTERNS = [
 # --- Prix indicatifs en USD / 1M tokens (input, cache_read, output) ---------
 # /!\ VALEURS À VÉRIFIER ET ÉDITER : approximatives, juste pour l'ordre de grandeur.
 # cache_read est facturé ~10% de l'input chez la plupart des fournisseurs.
-PRICES = {
+# La table est éditable sans toucher au code via
+# ~/.config/ilaas-agent/prices.json (voir prices_config_path / load_prices).
+DEFAULT_PRICE_ENTRIES = [
     # modele (motif regex) : (input, cache_read, output)  -- USD / 1M tokens
     # cache_read = input faute de tarif de hit de cache communiqué (à ajuster si remise).
-    r"glm-5\.2|glm5\.2":          (0.93,  0.93,  3.00),
-    r"deepseek-v4-pro":           (0.435, 0.435, 0.87),
-    r"deepseek-v4-flash":         (0.098, 0.098, 0.196),
-    r"claude-opus":               (15.0,  1.50,  75.0),
-    r"anthropic/claude.*sonnet":  (3.00,  0.30,  15.0),
-    r"claude-ilaas-|ilaas":       (0.0,   0.0,   0.0),   # passerelle locale / forfait
-    r"<synthetic>":               (0.0,   0.0,   0.0),
-}
+    {"pattern": r"glm-5\.2|glm5\.2",          "input": 0.93,  "cache_read": 0.93,  "output": 3.00},
+    {"pattern": r"deepseek-v4-pro",           "input": 0.435, "cache_read": 0.435, "output": 0.87},
+    {"pattern": r"deepseek-v4-flash",         "input": 0.098, "cache_read": 0.098, "output": 0.196},
+    {"pattern": r"claude-opus",               "input": 15.0,  "cache_read": 1.50,  "output": 75.0},
+    {"pattern": r"anthropic/claude.*sonnet",  "input": 3.00,  "cache_read": 0.30,  "output": 15.0},
+    {"pattern": r"claude-ilaas-|ilaas",       "input": 0.0,   "cache_read": 0.0,   "output": 0.0},  # passerelle locale / forfait
+    {"pattern": r"<synthetic>",               "input": 0.0,   "cache_read": 0.0,   "output": 0.0},
+]
 
 # --- "Stratégie basique" = tout sur le superviseur premium ------------------
 # Prix de référence pour le contrefactuel : ce que coûterait CHAQUE token
 # s'il avait été traité par le superviseur premier-prix (par défaut: Opus),
 # sans tiers ILaaS ni délégation. (input, cache_read, output) USD / 1M.
-BASELINE_PRICE = (15.0, 1.50, 75.0)
-BASELINE_NAME = "Opus seul (aucune délégation, aucun tier ILaaS)"
+DEFAULT_BASELINE = {"input": 15.0, "cache_read": 1.50, "output": 75.0, "name": "Opus seul (aucune délégation, aucun tier ILaaS)"}
+
+
+def prices_config_path() -> Path:
+    """Où lire la table de prix optionnelle (~/.config/ilaas-agent/prices.json)."""
+    base = os.environ.get("XDG_CONFIG_HOME") or os.path.join(os.path.expanduser("~"), ".config")
+    return Path(base) / "ilaas-agent" / "prices.json"
+
+
+def load_prices() -> tuple[list[dict], dict]:
+    """Charge les prix depuis prices.json si présent, sinon les defaults embarqués.
+
+    Format JSON : {"baseline": {"input":..,"cache_read":..,"output":..,"name":..},
+    "prices": [{"pattern": "..", "input":.., "cache_read":.., "output":..}, ...]}.
+    Une liste seule est interprétée comme les prix (baseline par défaut).
+    """
+    entries = list(DEFAULT_PRICE_ENTRIES)
+    baseline = dict(DEFAULT_BASELINE)
+    path = prices_config_path()
+    if path.is_file():
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            print(f"token_economy: failed to load {path}: {error}", file=sys.stderr)
+            return entries, baseline
+        if isinstance(data, list):
+            entries = data
+        elif isinstance(data, dict):
+            if isinstance(data.get("prices"), list):
+                entries = data["prices"]
+            if isinstance(data.get("baseline"), dict):
+                baseline.update(data["baseline"])
+    return entries, baseline
+
+
+PRICES, _loaded_baseline = load_prices()
+BASELINE_PRICE = (_loaded_baseline["input"], _loaded_baseline["cache_read"], _loaded_baseline["output"])
+BASELINE_NAME = _loaded_baseline["name"]
 
 
 def role_of(model: str) -> str:
@@ -73,36 +112,37 @@ def role_of(model: str) -> str:
 
 def price_of(model: str):
     m = (model or "").lower()
-    for pat, price in PRICES.items():
-        if re.search(pat, m):
-            return price
+    for entry in PRICES:
+        if re.search(entry["pattern"], m):
+            return (entry["input"], entry["cache_read"], entry["output"])
     return None  # inconnu -> coût n/a
 
 
 def iter_assistant_usages(fn: str):
     is_sub = "/subagents/" in fn.replace(os.sep, "/")
-    for line in open(fn, encoding="utf-8"):
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            o = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if o.get("type") != "assistant":
-            continue
-        msg = o.get("message") or {}
-        usage = msg.get("usage") or {}
-        if not usage:
-            continue
-        yield {
-            "model": msg.get("model") or "?",
-            "sidechain": bool(o.get("isSidechain", False)) or is_sub,
-            "input": int(usage.get("input_tokens") or 0),
-            "cache_read": int(usage.get("cache_read_input_tokens") or 0),
-            "cache_create": int(usage.get("cache_creation_input_tokens") or 0),
-            "output": int(usage.get("output_tokens") or 0),
-        }
+    with open(fn, encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                o = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if o.get("type") != "assistant":
+                continue
+            msg = o.get("message") or {}
+            usage = msg.get("usage") or {}
+            if not usage:
+                continue
+            yield {
+                "model": msg.get("model") or "?",
+                "sidechain": bool(o.get("isSidechain", False)) or is_sub,
+                "input": int(usage.get("input_tokens") or 0),
+                "cache_read": int(usage.get("cache_read_input_tokens") or 0),
+                "cache_create": int(usage.get("cache_creation_input_tokens") or 0),
+                "output": int(usage.get("output_tokens") or 0),
+            }
 
 
 def cost(u) -> float | None:
