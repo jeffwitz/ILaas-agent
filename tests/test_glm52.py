@@ -22,6 +22,38 @@ class Glm52Test(unittest.TestCase):
             ):
                 self.assertEqual(glm52.api_key(), "glm-external-secret")
 
+    def test_api_key_prefers_explicit_file_over_default(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            explicit_file = Path(tmp, "explicit.txt")
+            explicit_file.write_text("explicit-secret\n")
+            default_file = Path(tmp, "default.txt")
+            default_file.write_text("default-secret\n")
+            with mock.patch.dict(os.environ, {"GLM52_TOKEN_FILE": str(explicit_file)}, clear=True), mock.patch(
+                "ilaas_agents.glm52.DEFAULT_TOKEN_FILE", default_file
+            ):
+                self.assertEqual(glm52.api_key(), "explicit-secret")
+
+    def test_api_key_falls_back_to_legacy(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            legacy_file = Path(tmp, "GLM5.2.md")
+            legacy_file.write_text("legacy-secret\n")
+            missing_default = Path(tmp, "missing.token")
+            with mock.patch.dict(os.environ, {}, clear=True), mock.patch(
+                "ilaas_agents.glm52.DEFAULT_TOKEN_FILE", missing_default
+            ), mock.patch(
+                "ilaas_agents.paths.legacy_key_file", return_value=legacy_file
+            ), mock.patch("ilaas_agents.paths.warn_legacy_key") as warn:
+                self.assertEqual(glm52.api_key(), "legacy-secret")
+                warn.assert_called_once_with("glm52")
+
+    def test_api_key_missing_raises(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.dict(os.environ, {}, clear=True), mock.patch(
+                "ilaas_agents.glm52.DEFAULT_TOKEN_FILE", Path(tmp, "missing.token")
+            ), mock.patch("ilaas_agents.paths.legacy_key_file", return_value=None):
+                with self.assertRaises(SystemExit):
+                    glm52.api_key()
+
     def test_opencode_config_uses_glm52_provider(self):
         with mock.patch.dict(os.environ, {}, clear=True):
             payload = json.loads(glm52.opencode_config_content())

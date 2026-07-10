@@ -26,7 +26,7 @@ DEFAULT_OPENCODE_MODEL = "~openai/gpt-latest"
 DEFAULT_OPENAI_BASE_URL = "https://openrouter.ai/api/v1"
 DEFAULT_ANTHROPIC_BASE_URL = "https://openrouter.ai/api"
 PROVIDER_ID = "openrouter"
-DEFAULT_TOKEN_FILE = Path("/home/jeff/Code/clef_api/OPEN_ROUTER.md")
+DEFAULT_TOKEN_FILE = paths.key_file("openrouter")
 
 
 def api_key() -> str:
@@ -35,18 +35,22 @@ def api_key() -> str:
         token = configured.strip()
     else:
         explicit = os.environ.get("OPENROUTER_TOKEN_FILE")
+        legacy = paths.legacy_key_file("openrouter")
         candidates = [
             Path(explicit).expanduser() if explicit else None,
             DEFAULT_TOKEN_FILE,
             paths.repo_root() / "OPENROUTER.md",
             paths.repo_root() / "OPEN_ROUTER.md",
+            legacy,
         ]
         token_path = next((path for path in candidates if path and path.is_file()), None)
         if token_path is None:
             raise SystemExit(
-                "OpenRouter token not found. Set OPENROUTER_API_KEY or "
-                f"put it in {DEFAULT_TOKEN_FILE}, OPENROUTER.md or OPEN_ROUTER.md."
+                "OpenRouter token not found. Set OPENROUTER_API_KEY, "
+                f"OPENROUTER_TOKEN_FILE, or place it at {paths.key_file('openrouter')}."
             )
+        if token_path == legacy:
+            paths.warn_legacy_key("openrouter")
         token = token_path.read_text(encoding="utf-8").strip()
 
     if not token or any(character.isspace() for character in token):

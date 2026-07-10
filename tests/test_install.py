@@ -10,15 +10,57 @@ from ilaas_agents import install
 
 
 class InstallTest(unittest.TestCase):
+    def _args(self, **overrides):
+        base = dict(api_base=None, api_key_env="ILAAS_API_KEY", api_key_file=None, non_interactive=True)
+        base.update(overrides)
+        return argparse.Namespace(**base)
+
     def test_resolve_api_key_supports_file(self):
         with tempfile.TemporaryDirectory() as tmp:
             token_file = Path(tmp, "Ilaas.txt")
             token_file.write_text("ilaas-file-secret\n")
-            args = argparse.Namespace(api_base=None, api_key_env="ILAAS_API_KEY", api_key_file=str(token_file), non_interactive=True)
+            args = self._args(api_key_file=str(token_file))
             with mock.patch.dict("os.environ", {}, clear=True), mock.patch(
                 "ilaas_agents.models.extract_existing_settings", return_value=None
             ):
                 self.assertEqual(install.resolve_api_key(args), ("https://llm.ilaas.fr/v1", "ilaas-file-secret"))
+
+    def test_resolve_api_key_env_wins_over_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            token_file = Path(tmp, "Ilaas.txt")
+            token_file.write_text("from-file\n")
+            args = self._args(api_key_file=str(token_file))
+            with mock.patch.dict("os.environ", {"ILAAS_API_KEY": "from-env"}, clear=True), mock.patch(
+                "ilaas_agents.models.extract_existing_settings", return_value=None
+            ):
+                _, api_key = install.resolve_api_key(args)
+                self.assertEqual(api_key, "from-env")
+
+    def test_resolve_api_key_uses_default_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            default_file = Path(tmp, "ilaas.token")
+            default_file.write_text("default-secret\n")
+            args = self._args()
+            with mock.patch.dict("os.environ", {}, clear=True), mock.patch(
+                "ilaas_agents.models.extract_existing_settings", return_value=None
+            ), mock.patch("ilaas_agents.install.DEFAULT_ILAAS_TOKEN_FILE", default_file):
+                _, api_key = install.resolve_api_key(args)
+                self.assertEqual(api_key, "default-secret")
+
+    def test_resolve_api_key_legacy_fallback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            legacy_file = Path(tmp, "Ilaas.txt")
+            legacy_file.write_text("legacy-secret\n")
+            missing_default = Path(tmp, "missing.token")
+            args = self._args()
+            with mock.patch.dict("os.environ", {}, clear=True), mock.patch(
+                "ilaas_agents.models.extract_existing_settings", return_value=None
+            ), mock.patch("ilaas_agents.install.DEFAULT_ILAAS_TOKEN_FILE", missing_default), mock.patch(
+                "ilaas_agents.paths.legacy_key_file", return_value=legacy_file
+            ), mock.patch("ilaas_agents.paths.warn_legacy_key") as warn:
+                _, api_key = install.resolve_api_key(args)
+                self.assertEqual(api_key, "legacy-secret")
+                warn.assert_called_once_with("ilaas")
 
     def test_isolated_install_writes_under_overridden_paths(self):
         with tempfile.TemporaryDirectory() as tmp:

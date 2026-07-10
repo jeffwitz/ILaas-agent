@@ -32,6 +32,17 @@ class OpenRouterTest(unittest.TestCase):
             ):
                 self.assertEqual(openrouter.api_key(), "sk-or-external-secret")
 
+    def test_api_key_prefers_explicit_file_over_default(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            explicit_file = Path(tmp, "explicit.md")
+            explicit_file.write_text("explicit-or\n")
+            default_file = Path(tmp, "default.token")
+            default_file.write_text("default-or\n")
+            with mock.patch.dict(os.environ, {"OPENROUTER_TOKEN_FILE": str(explicit_file)}, clear=True), mock.patch(
+                "ilaas_agents.openrouter.DEFAULT_TOKEN_FILE", default_file
+            ), mock.patch("ilaas_agents.openrouter.paths.repo_root", return_value=Path(tmp)):
+                self.assertEqual(openrouter.api_key(), "explicit-or")
+
     def test_default_models_use_openrouter_aliases(self):
         # Isolate the tier catalog so resolution falls back to the built-in
         # defaults instead of reading whatever is in the user's real cache.

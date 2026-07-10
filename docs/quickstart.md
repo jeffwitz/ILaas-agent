@@ -34,7 +34,7 @@ Ilaas-doctor
 
 ## 2. Provide your OpenRouter key
 
-Either export it, or put it in the file the launcher reads by default (`/home/jeff/Code/clef_api/OPEN_ROUTER.md` on the author's machine — override with `$OPENROUTER_TOKEN_FILE`):
+Either export it, or put it in the file the launcher reads by default (`~/.config/ilaas-agent/keys/openrouter.token` — override the directory with `$ILAAS_KEYS_DIR`, or the file with `$OPENROUTER_TOKEN_FILE`):
 
 ```bash
 export OPENROUTER_API_KEY=sk-or-...        # preferred

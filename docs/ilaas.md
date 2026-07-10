@@ -4,15 +4,19 @@ ILaaS Agent installs a local LiteLLM gateway and adapters for Codex CLI, Claude 
 
 ## Install
 
-Clone the repository, then keep the ILaaS key outside the Git checkout. The default local key path is `/home/jeff/Code/clef_api/Ilaas.txt`:
+Clone the repository, then keep the ILaaS key outside the Git checkout. The default local key file is `~/.config/ilaas-agent/keys/ilaas.token` (override the directory with `ILAAS_KEYS_DIR`):
 
 ```bash
 git clone https://github.com/jeffwitz/ILaas-agent.git
 cd ILaas-agent
+mkdir -p ~/.config/ilaas-agent/keys
+chmod 700 ~/.config/ilaas-agent/keys
+printf '%s' "YOUR_ILAAS_KEY" > ~/.config/ilaas-agent/keys/ilaas.token
+chmod 600 ~/.config/ilaas-agent/keys/ilaas.token
 python3 install.py
 ```
 
-The installer reads `/home/jeff/Code/clef_api/Ilaas.txt` when `ILAAS_API_KEY` is not set. You can override the path with `--api-key-file`, or keep using an environment variable:
+The installer reads `~/.config/ilaas-agent/keys/ilaas.token` when `ILAAS_API_KEY` is not set. You can override the path with `--api-key-file`, point `ILAAS_KEYS_DIR` at another directory, or keep using an environment variable:
 
 ```bash
 read -rsp "ILaaS API key: " ILAAS_API_KEY

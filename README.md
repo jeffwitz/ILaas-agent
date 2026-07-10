@@ -106,13 +106,13 @@ Ilaas-claude --list-models
 
 ## GLM 5.2 Direct API
 
-Put the Z.AI token alone on one line in `/home/jeff/Code/clef_api/GLM5.2.md`, or export it without a file:
+Put the Z.AI token alone on one line in `~/.config/ilaas-agent/keys/glm52.token` (override the directory with `ILAAS_KEYS_DIR`), or export it without a file:
 
 ```bash
 export GLM52_API_KEY="your_zai_key"
 ```
 
-The external token file stays outside the Git repository and is read only when a `glm52-*` command starts. Legacy root-level `GLM5.2.md` is still ignored by Git but should not be used because it can be picked up by code indexing. Run the three agents with:
+The keys directory stays outside the Git repository and is read only when a `glm52-*` command starts. Legacy root-level `GLM5.2.md` is still ignored by Git but should not be used because it can be picked up by code indexing. Run the three agents with:
 
 ```bash
 glm52-codex exec --skip-git-repo-check "Reply exactly: OK"
@@ -133,7 +133,7 @@ Codex uses the repository's local Responses-to-Chat-Completions adapter because 
 
 ## OpenRouter Direct API
 
-Put the OpenRouter key alone on one line in `/home/jeff/Code/clef_api/OPEN_ROUTER.md`, or export it:
+Put the OpenRouter key alone on one line in `~/.config/ilaas-agent/keys/openrouter.token` (override the directory with `ILAAS_KEYS_DIR`), or export it:
 
 ```bash
 export OPENROUTER_API_KEY="sk-or-..."

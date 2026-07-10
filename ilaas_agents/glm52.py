@@ -16,7 +16,7 @@ DEFAULT_MODEL = "glm-5.2"
 DEFAULT_OPENAI_BASE_URL = "https://api.z.ai/api/paas/v4"
 DEFAULT_ANTHROPIC_BASE_URL = "https://api.z.ai/api/anthropic"
 PROVIDER_ID = "glm52"
-DEFAULT_TOKEN_FILE = Path("/home/jeff/Code/clef_api/GLM5.2.md")
+DEFAULT_TOKEN_FILE = paths.key_file("glm52")
 
 
 def model_name() -> str:
@@ -28,11 +28,19 @@ def api_key() -> str:
     if configured:
         return configured.strip()
 
-    token_path = Path(os.environ.get("GLM52_TOKEN_FILE", DEFAULT_TOKEN_FILE)).expanduser()
-    if not token_path.is_file():
+    explicit = os.environ.get("GLM52_TOKEN_FILE")
+    token_path = Path(explicit).expanduser() if explicit else None
+    if token_path is None or not token_path.is_file():
+        token_path = DEFAULT_TOKEN_FILE if DEFAULT_TOKEN_FILE.is_file() else None
+    if token_path is None:
+        legacy = paths.legacy_key_file("glm52")
+        if legacy and legacy.is_file():
+            paths.warn_legacy_key("glm52")
+            token_path = legacy
+    if token_path is None or not token_path.is_file():
         raise SystemExit(
-            f"GLM 5.2 token not found: {token_path}. "
-            "Set GLM52_API_KEY or GLM52_TOKEN_FILE."
+            f"GLM 5.2 token not found. Set GLM52_API_KEY, GLM52_TOKEN_FILE, "
+            f"or place it at {paths.key_file('glm52')}."
         )
     token = token_path.read_text(encoding="utf-8").strip()
     if not token or any(character.isspace() for character in token):

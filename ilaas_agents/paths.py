@@ -2,10 +2,20 @@ from __future__ import annotations
 
 import os
 import platform
+import sys
 from pathlib import Path
 
 
 APP_NAME = "ilaas-code-agents"
+
+# Personal absolute paths from the original build. Kept only as a deprecation
+# fallback so existing author setups keep working one release beyond the move
+# to keys_dir(); see CdC-ilaas-agent-v2.md ticket A2. Do not extend.
+LEGACY_KEY_FILES = {
+    "ilaas": Path("/home/jeff/Code/clef_api/Ilaas.txt"),
+    "glm52": Path("/home/jeff/Code/clef_api/GLM5.2.md"),
+    "openrouter": Path("/home/jeff/Code/clef_api/OPEN_ROUTER.md"),
+}
 
 
 def system() -> str:
@@ -100,3 +110,27 @@ def claude_openrouter_home() -> Path:
 
 def token_economy_script() -> Path:
     return repo_root() / "scripts" / "token_economy.py"
+
+
+def keys_dir() -> Path:
+    """Directory holding provider token files. Override with ILAAS_KEYS_DIR."""
+    return env_path("ILAAS_KEYS_DIR", config_home() / "ilaas-agent" / "keys")
+
+
+def key_file(provider: str) -> Path:
+    """Default token file for a provider (ilaas/glm52/openrouter)."""
+    return keys_dir() / f"{provider}.token"
+
+
+def legacy_key_file(provider: str) -> Path | None:
+    """Hardcoded personal path, kept only for the deprecation fallback."""
+    return LEGACY_KEY_FILES.get(provider)
+
+
+def warn_legacy_key(provider: str) -> None:
+    """Print a one-line deprecation notice when a legacy key path is used."""
+    print(
+        f"ilaas-agent: using legacy {provider} key at {legacy_key_file(provider)}; "
+        f"move it to {key_file(provider)} (removed next release).",
+        file=sys.stderr,
+    )

@@ -48,6 +48,25 @@ class PathsTest(unittest.TestCase):
                 self.assertEqual(paths.model_catalog_path(), root / "custom-catalog.json")
                 self.assertEqual(paths.litellm_venv(), root / "custom-venv")
 
+    def test_keys_dir_default_under_config_home(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.dict("os.environ", {"ILAAS_CONFIG_HOME": tmp}, clear=False):
+                self.assertEqual(paths.keys_dir(), Path(tmp) / "ilaas-agent" / "keys")
+                self.assertEqual(paths.key_file("ilaas"), Path(tmp) / "ilaas-agent" / "keys" / "ilaas.token")
+                self.assertEqual(paths.key_file("glm52"), Path(tmp) / "ilaas-agent" / "keys" / "glm52.token")
+                self.assertEqual(paths.key_file("openrouter"), Path(tmp) / "ilaas-agent" / "keys" / "openrouter.token")
+
+    def test_keys_dir_override(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.dict("os.environ", {"ILAAS_KEYS_DIR": tmp}, clear=False):
+                self.assertEqual(paths.keys_dir(), Path(tmp))
+                self.assertEqual(paths.key_file("ilaas"), Path(tmp) / "ilaas.token")
+
+    def test_legacy_key_files_known_providers(self):
+        for provider in ("ilaas", "glm52", "openrouter"):
+            self.assertIsNotNone(paths.legacy_key_file(provider))
+        self.assertIsNone(paths.legacy_key_file("unknown"))
+
 
 if __name__ == "__main__":
     unittest.main()

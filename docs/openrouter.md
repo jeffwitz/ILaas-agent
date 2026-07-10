@@ -11,19 +11,22 @@ read -rsp "OpenRouter API key: " OPENROUTER_API_KEY
 export OPENROUTER_API_KEY
 ```
 
-For a persistent local setup, put only the key on one line in `/home/jeff/Code/clef_api/OPEN_ROUTER.md`. This external path is used by default when `OPENROUTER_API_KEY` is not set:
+For a persistent local setup, put only the key on one line in `~/.config/ilaas-agent/keys/openrouter.token` (override the directory with `ILAAS_KEYS_DIR`). This file is read when `OPENROUTER_API_KEY` is not set:
 
 ```text
 sk-or-v1-...
 ```
 
-Restrict access to the external key file:
+Create the key file with restrictive permissions:
 
 ```bash
-chmod 600 /home/jeff/Code/clef_api/OPEN_ROUTER.md
+mkdir -p ~/.config/ilaas-agent/keys
+chmod 700 ~/.config/ilaas-agent/keys
+printf '%s' "sk-or-v1-..." > ~/.config/ilaas-agent/keys/openrouter.token
+chmod 600 ~/.config/ilaas-agent/keys/openrouter.token
 ```
 
-Legacy root-level files `OPENROUTER.md` and `OPEN_ROUTER.md` are still supported for compatibility and ignored by Git, but the external `/home/jeff/Code/clef_api/OPEN_ROUTER.md` path is preferred because it stays outside the repository and outside code indexing. The environment variable takes precedence over the local file. A file stored elsewhere can be selected with `OPENROUTER_TOKEN_FILE=/absolute/path/to/key`.
+Resolution order: the `OPENROUTER_API_KEY` environment variable, then `OPENROUTER_TOKEN_FILE` (an explicit path), then the `~/.config/ilaas-agent/keys/openrouter.token` default. Legacy root-level files `OPENROUTER.md` and `OPEN_ROUTER.md` at the repository root are still supported for compatibility and ignored by Git, but the keys-directory default is preferred because it stays outside the repository and outside code indexing.
 
 ## Launch the agents
 

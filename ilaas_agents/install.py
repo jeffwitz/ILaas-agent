@@ -12,7 +12,7 @@ from pathlib import Path
 from . import commands, config, deps, models, paths, wrappers
 
 
-DEFAULT_ILAAS_TOKEN_FILE = Path("/home/jeff/Code/clef_api/Ilaas.txt")
+DEFAULT_ILAAS_TOKEN_FILE = paths.key_file("ilaas")
 
 
 def litellm_bin() -> str:
@@ -36,15 +36,30 @@ def resolve_api_key(args: argparse.Namespace) -> tuple[str, str]:
     existing = models.extract_existing_settings(paths.litellm_config_path())
     api_base = args.api_base or (existing[0] if existing else models.DEFAULT_API_BASE)
     api_key = os.environ.get(args.api_key_env or "ILAAS_API_KEY")
-    api_key_file = Path(getattr(args, "api_key_file", None)).expanduser() if getattr(args, "api_key_file", None) else DEFAULT_ILAAS_TOKEN_FILE
-    if not api_key and api_key_file.is_file():
-        api_key = api_key_file.read_text(encoding="utf-8").strip()
+    api_key_file: Path | None = None
+    if not api_key:
+        explicit = getattr(args, "api_key_file", None)
+        explicit_path = Path(explicit).expanduser() if explicit else None
+        if explicit_path and explicit_path.is_file():
+            api_key_file = explicit_path
+        elif DEFAULT_ILAAS_TOKEN_FILE.is_file():
+            api_key_file = DEFAULT_ILAAS_TOKEN_FILE
+        else:
+            legacy = paths.legacy_key_file("ilaas")
+            if legacy and legacy.is_file():
+                paths.warn_legacy_key("ilaas")
+                api_key_file = legacy
+        if api_key_file:
+            api_key = api_key_file.read_text(encoding="utf-8").strip()
     if not api_key and existing:
         api_key = existing[1]
     if not api_key and not args.non_interactive:
         api_key = getpass.getpass("ILaaS API key: ").strip()
     if not api_key:
-        raise SystemExit(f"Missing ILaaS API key. Set ILAAS_API_KEY, put it in {api_key_file}, or run interactively.")
+        raise SystemExit(
+            "Missing ILaaS API key. Set ILAAS_API_KEY, "
+            f"place it at {paths.key_file('ilaas')}, or run interactively."
+        )
     if any(character.isspace() for character in api_key):
         raise SystemExit("The ILaaS API key must be a single non-empty value.")
     return api_base, api_key

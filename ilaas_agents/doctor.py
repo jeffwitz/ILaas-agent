@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shutil
 import socket
 import subprocess
@@ -31,6 +32,32 @@ def command_version(command: str) -> str | None:
 
 def exists(label: str, path: Path) -> tuple[str, bool, str]:
     return (label, path.exists(), str(path))
+
+
+# provider -> (api key env, explicit token-file env). None when no file env.
+KEY_ENVS = {
+    "ilaas": ("ILAAS_API_KEY", None),
+    "glm52": ("GLM52_API_KEY", "GLM52_TOKEN_FILE"),
+    "openrouter": ("OPENROUTER_API_KEY", "OPENROUTER_TOKEN_FILE"),
+}
+
+
+def key_source(provider: str) -> tuple[str, bool, str]:
+    """Report which key source resolves for a provider, never the key value."""
+    api_env, file_env = KEY_ENVS[provider]
+    if os.environ.get(api_env):
+        return (f"{provider} key", True, f"env {api_env}")
+    explicit = os.environ.get(file_env) if file_env else None
+    if explicit:
+        path = Path(explicit).expanduser()
+        return (f"{provider} key", path.is_file(), f"file {path}")
+    default = paths.key_file(provider)
+    if default.is_file():
+        return (f"{provider} key", True, f"file {default}")
+    legacy = paths.legacy_key_file(provider)
+    if legacy and legacy.is_file():
+        return (f"{provider} key", True, f"legacy file {legacy} (deprecated)")
+    return (f"{provider} key", False, f"not set (env {api_env} or {default})")
 
 
 def http_json_ok(label: str, url: str, expected_service: str | None = None) -> tuple[str, bool, str]:
@@ -65,6 +92,8 @@ def run() -> int:
         ("Codex proxy port 4001", port_open("127.0.0.1", 4001), "127.0.0.1:4001"),
         ("Claude proxy port 4002", port_open("127.0.0.1", 4002), "127.0.0.1:4002"),
     ]
+    for provider in KEY_ENVS:
+        checks.append(key_source(provider))
     for key, ok, detail in deps.runtime_statuses():
         checks.append((key, ok, detail))
     for key, ok, detail in deps.agent_statuses():
