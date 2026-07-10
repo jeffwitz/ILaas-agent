@@ -133,9 +133,13 @@ def write_codex_catalog(path: Path, model_ids: list[str]) -> None:
         model["slug"] = alias
         model["display_name"] = display_name(alias)
         model["description"] = f"{alias} routed to {target} through the local LiteLLM Responses proxy."
-        model["base_instructions"] = MODEL_TEMPLATE["base_instructions"] + "\n\n" + model_identity_instruction(alias, target)
+        base_instructions = MODEL_TEMPLATE["base_instructions"]
+        assert isinstance(base_instructions, str)
+        model["base_instructions"] = base_instructions + "\n\n" + model_identity_instruction(alias, target)
         if alias.startswith("llama-3.1-") or alias.startswith("llama-3.3-"):
-            model["description"] += " Not recommended for code-agent tool use."
+            description = model["description"]
+            assert isinstance(description, str)
+            model["description"] = description + " Not recommended for code-agent tool use."
         model["tier"] = tiers.assign_tier("ilaas", alias)
         models.append(model)
     path.parent.mkdir(parents=True, exist_ok=True)

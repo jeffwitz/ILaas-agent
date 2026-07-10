@@ -14,6 +14,14 @@ jobs:
           python-version: "3.11"
       - name: Compile Python
         run: python -m py_compile install.py ilaas_agents/*.py proxies/*.py
+      - name: Lint (ruff)
+        run: |
+          python -m pip install ruff
+          ruff check ilaas_agents/ proxies/ scripts/ install.py
+      - name: Type check (mypy)
+        run: |
+          python -m pip install mypy
+          mypy ilaas_agents
       - name: Shell syntax
         run: bash -n Ilaas-codex Ilaas-claude Ilaas-opencode Ilaas-doctor Ilaas-servers install.sh
       - name: Unit tests

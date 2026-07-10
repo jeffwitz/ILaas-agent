@@ -19,7 +19,6 @@ Les prix et le mapping rôle<-modèle sont éditables ci-dessous.
 from __future__ import annotations
 
 import argparse
-import glob
 import json
 import os
 import re
@@ -272,14 +271,14 @@ def report(title, by_model, by_role, side):
     # Économie : part de l'input portée hors superviseur
     sup_in = by_role.get("superviseur", {}).get("in", 0)
     deleg_in = tot_in - sup_in
-    print(f"\nRépartition de l'input (le coût récurrent du contexte) :")
+    print("\nRépartition de l'input (le coût récurrent du contexte) :")
     print(f"  superviseur            : {100*sup_in/tot_in:5.1f} %  ({fmt(int(sup_in))} tok)")
     print(f"  délégué hors superviseur: {100*deleg_in/tot_in:5.1f} %  ({fmt(int(deleg_in))} tok)")
 
     if side.get("sidechain", {}).get("msgs"):
         s, m = side["sidechain"], side["main"]
         tin = (s["in"] + m["in"]) or 1
-        print(f"\nSplit sidechain (sous-agents réellement spawné) :")
+        print("\nSplit sidechain (sous-agents réellement spawné) :")
         print(f"  main loop : {fmt(m['in'])} in / {fmt(m['out'])} out  ({m['msgs']} msgs)")
         print(f"  sidechain : {fmt(s['in'])} in / {fmt(s['out'])} out  ({s['msgs']} msgs)  "
               f"-> {100*s['in']/tin:.1f}% de l'input absorbé par les délégués")

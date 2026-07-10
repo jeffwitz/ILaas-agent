@@ -368,7 +368,6 @@ class ProxyHandler(BaseHTTPRequestHandler):
         next_index = 0
         text_state = None  # {"index","id","text","started","closed"}
         tool_states = {}  # upstream tool index -> dict
-        finish_reason = None
         usage_raw = None
 
         def ensure_text_started():
@@ -456,8 +455,6 @@ class ProxyHandler(BaseHTTPRequestHandler):
                         new = st["arguments"][st["emitted"]:]
                         self.write_chunked(sse_line({"type": "response.function_call_arguments.delta", "item_id": st["id"], "output_index": st["index"], "delta": new}))
                         st["emitted"] = len(st["arguments"])
-                if choice.get("finish_reason"):
-                    finish_reason = choice["finish_reason"]
                 usage = chunk.get("usage")
                 if isinstance(usage, dict):
                     usage_raw = usage

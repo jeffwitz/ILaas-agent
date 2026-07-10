@@ -137,8 +137,9 @@ def main() -> None:
                 print(f"{args.provider} {tier}: {mapping.get(tier, '(none)')}")
             raise SystemExit(0)
         # tiers_action == "apply"
+        apply_mapping: dict[str, str] | None
         if args.tier:
-            mapping = {}
+            apply_mapping = {}
             for entry in args.tier:
                 if "=" not in entry:
                     raise SystemExit(f"Invalid --tier format '{entry}': expected tier=slug (e.g. --tier supervisor=qwen-3.6-35b-instruct)")
@@ -148,10 +149,10 @@ def main() -> None:
                     raise SystemExit(f"Invalid --tier format '{entry}': both tier and slug must be non-empty")
                 if key not in tiers.TIERS:
                     raise SystemExit(f"Unknown tier '{key}'; expected one of: {', '.join(tiers.TIERS)}")
-                mapping[key] = val
+                apply_mapping[key] = val
         else:
-            mapping = None
-        counts = tiers.apply(args.provider, mapping)
+            apply_mapping = None
+        counts = tiers.apply(args.provider, apply_mapping)
         print(f"Applied tiers to {args.provider} catalog: {counts}")
         raise SystemExit(0)
     elif args.command == "harness":

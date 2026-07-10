@@ -15,3 +15,18 @@ ilaas-agent = "ilaas_agents.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["ilaas_agents*", "proxies*"]
+
+[tool.ruff]
+line-length = 140
+target-version = "py310"
+
+[tool.ruff.lint]
+# Baseline: pyflakes (F) + pycodestyle errors that catch real bugs (E7 undefined,
+# E4 imports, E9 syntax). Line-length (E5) is intentionally excluded.
+select = ["E4", "E7", "E9", "F"]
+
+[tool.mypy]
+ignore_missing_imports = true
+# processes.py signal/Popen handling is frozen (plan S2); excluded from
+# type-checking. Non-strict baseline to start; --strict is the ratchet target.
+exclude = ["ilaas_agents/processes.py"]

@@ -375,6 +375,8 @@ ilaas-agent --help
 
 ```bash
 python3 -m py_compile install.py ilaas_agents/*.py proxies/*.py scripts/*.py
+ruff check ilaas_agents/ proxies/ scripts/ install.py
+mypy ilaas_agents
 python3 -m unittest discover -s tests
 bash -n Ilaas-codex Ilaas-claude Ilaas-opencode Ilaas-doctor Ilaas-servers glm52-codex glm52-claude glm52-opencode openrouter-codex openrouter-claude openrouter-opencode install.sh
 python3 -m sphinx -b html -W --keep-going docs docs/_build/html
