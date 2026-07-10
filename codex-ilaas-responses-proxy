@@ -1,3 +1,5 @@
 #!/usr/bin/env bash
+# Thin re-exec of the canonical proxy in proxies/. The root copy was removed
+# (see CdC-ilaas-agent-v2.md, ticket A1) to guarantee a single source of truth.
 set -euo pipefail
-exec python3 "$(dirname "$0")/codex_ilaas_responses_proxy.py" "$@"
+exec python3 "$(dirname "$0")/proxies/codex_ilaas_responses_proxy.py" "$@"

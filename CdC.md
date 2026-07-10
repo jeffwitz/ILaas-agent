@@ -48,8 +48,8 @@ Each agent needs a different local interface:
 
 | Agent | Expected interface | Local handling |
 | --- | --- | --- |
-| Codex CLI | OpenAI Responses API | `codex_ilaas_responses_proxy.py` on port 4001 |
-| Claude Code | Anthropic Messages API | `claude_ilaas_messages_proxy.py` on port 4002 |
+| Codex CLI | OpenAI Responses API | `proxies/codex_ilaas_responses_proxy.py` on port 4001 |
+| Claude Code | Anthropic Messages API | `proxies/claude_ilaas_messages_proxy.py` on port 4002 |
 | OpenCode | OpenAI-compatible provider | Direct LiteLLM provider injected with `OPENCODE_CONFIG_CONTENT` |
 
 ## 4. Repository Layout
