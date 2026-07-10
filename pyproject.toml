@@ -6,6 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "ilaas-code-agents"
 version = "0.1.0"
 description = "Local ILaaS integration helpers for Codex CLI, Claude Code, and OpenCode."
+license = "GPL-2.0-or-later"
 requires-python = ">=3.10"
 dependencies = []
 

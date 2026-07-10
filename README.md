@@ -383,3 +383,7 @@ ilaas-agent --help
 python3 scripts/wine_windows_wrapper_check.py
 python3 scripts/clone_isolated_check.py
 ```
+
+## License
+
+This project is licensed under the GNU General Public License v2.0 or later (`GPL-2.0-or-later`). See [LICENSE](LICENSE) for the full text.
