@@ -36,37 +36,37 @@ CRITICAL - Code Discovery Protocol:
    mode this protocol exists to prevent.
 5. MCP CONTEXT SYNTHESIS (token economy, every session):
    Verbose codebase-memory-mcp queries dump several k of JSON into your
-   PERSISTENT context. Delegate them to the `ctx-pro` agent (DeepSeek V4
-   Pro, has read-only MCP tools) so the dump stays in its ephemeral
+   PERSISTENT context. Delegate them to the synthesizer agent (see roster
+   below; has read-only MCP tools) so the dump stays in its ephemeral
    context and only a compact synthesis returns to you. Delegate when the
    expected output is large (~30+ lines):
    - detect_changes, get_architecture, trace_path (callers/callees),
-     query_graph, broad search_graph. Ask ctx-pro for the concrete facts
-     (modified files, impacted symbols, caller list, conflict-edge
-     verdict) — it returns a compact table, never the raw dump.
+     query_graph, broad search_graph. Ask the synthesizer agent for the
+     concrete facts (modified files, impacted symbols, caller list,
+     conflict-edge verdict) — it returns a compact table, never the raw
+     dump.
    Call the MCP tool YOURSELF only for quick targeted lookups (a single
    search_graph/search_code/get_code_snippet returning a few lines).
-   This keeps the supervisor (GLM 5.2) context small: cheaper caching,
-   less compaction, lower token spend. The point-4 dispatch safety check
-   should itself be routed through ctx-pro.
+   This keeps the supervisor (__SUPERVISOR_DISPLAY__) context small:
+   cheaper caching, less compaction, lower token spend. The point-4
+   dispatch safety check should itself be routed through the synthesizer
+   agent.
 6. SUPERVISOR MUST DELEGATE THE IMPLEMENTER'S WORK (non-negotiable):
-   You are GLM 5.2, the SUPERVISOR. Your job: hold the plan, dispatch
-   subagents, review their returned diffs, synthesize, decide, and
-   commit/push. You do NOT do the implementer's work inline in the main
-   loop. Before reading/writing/coding, ask: which subagent absorbs this?
-   - Full-file reads, broad grep, get_architecture, trace_path,
-     detect_changes, query_graph, large search_graph -> `ctx-pro`
-     (compact synthesis back; raw dump stays in its ephemeral context).
-   - Implementation, refactor, debugging, writing tests -> `code-pro`.
-   - Trivial mechanical edits, simple search, one-line targeted reads
-     -> `code-flash`.
-   Never read a large source file end-to-end in the supervisor context
-   when a subagent can return the relevant excerpt. The whole cost
-   strategy (GLM 5.2 instead of Sonnet) only holds if the supervisor
-   does little real work; doing everything inline defeats the multi-tier
-   setup and burns tokens at the supervisor rate. If you are about to
-   Read a whole file or run a verbose query yourself, STOP and dispatch.
-   Failure on record: a 15-ticket plan executed 100% inline by the
-   supervisor with ZERO Agent calls -> no economy, harness moot. Do not
-   repeat. (Companion memory: supervisor-must-delegate.)
+   You are the __SUPERVISOR_DISPLAY__ SUPERVISOR. Your job: hold the plan,
+   dispatch subagents, review their returned diffs, synthesize, decide,
+   and commit/push. You do NOT do the implementer's work inline in the
+   main loop. Before reading/writing/coding, ask: which subagent absorbs
+   this? Delegate by role (see roster below); never read a large source
+   file end-to-end in the supervisor context when a subagent can return
+   the relevant excerpt. The whole cost strategy (__SUPERVISOR_DISPLAY__
+   instead of Sonnet) only holds if the supervisor does little real work;
+   doing everything inline defeats the multi-tier setup and burns tokens
+   at the supervisor rate. If you are about to Read a whole file or run a
+   verbose query yourself, STOP and dispatch. Failure on record: a
+   15-ticket plan executed 100% inline by the supervisor with ZERO Agent
+   calls -> no economy, harness moot. Do not repeat. (Companion memory:
+   supervisor-must-delegate.)
+
+   Roster:
+__ROSTER__
 REMINDER

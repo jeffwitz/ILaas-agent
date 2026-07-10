@@ -13,14 +13,16 @@ openrouter config home, matching the existing layout.
 """
 from __future__ import annotations
 
+import json
 import os
 import shutil
 from pathlib import Path
 
-from . import paths
+from . import paths, tiers
 
 
 HARNESS_DIR = paths.repo_root() / "harness"
+HIERARCHY_PATH = HARNESS_DIR / "hierarchy.json"
 PLACEHOLDER = "__CODEBASE_MEMORY_BIN__"
 
 
@@ -40,16 +42,77 @@ def codebase_memory_bin() -> str | None:
     return str(default) if default.exists() else None
 
 
+def load_hierarchy() -> dict:
+    """Load and parse harness/hierarchy.json.
+
+    Raises SystemExit if the file is missing or contains invalid JSON.
+    """
+    if not HIERARCHY_PATH.is_file():
+        raise SystemExit(f"hierarchy file not found: {HIERARCHY_PATH}")
+    try:
+        return json.loads(HIERARCHY_PATH.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as exc:
+        raise SystemExit(f"hierarchy file is invalid: {HIERARCHY_PATH}: {exc}") from exc
+
+
+def resolve_agent_model(hierarchy: dict, name: str) -> str:
+    """Resolve the concrete model string for agent ``name`` from the hierarchy.
+
+    Looks up the agent's tier via ``tiers.resolve``; falls back to the
+    ``default_slug`` defined in hierarchy.json if the tier catalog has no entry.
+    """
+    entry = hierarchy["agents"][name]
+    slug = tiers.resolve(hierarchy["provider"], entry["tier"]) or entry["default_slug"]
+    return f'{hierarchy["model_prefix"]}{slug}'
+
+
+def resolve_supervisor_display(hierarchy: dict) -> str:
+    """Return the supervisor display name from the hierarchy."""
+    return hierarchy["supervisor"]["display"]
+
+
+def render_roster(hierarchy: dict) -> str:
+    """Generate a compact block listing the supervisor and each agent."""
+    sup = hierarchy["supervisor"]
+    lines: list[str] = []
+    lines.append(
+        f"   - supervisor (tier={sup['tier']}, model={sup['display']})"
+        " — holds the plan, reviews diffs, synthesizes, commits"
+    )
+    for name, entry in hierarchy["agents"].items():
+        lines.append(
+            f"   - {name} (tier={entry['tier']}, model={entry['display']})"
+            f" — {entry['role']}"
+        )
+    return "\n".join(lines)
+
+
 def _render(template: str, bin_path: str) -> str:
     if PLACEHOLDER not in template:
         return template
     return template.replace(PLACEHOLDER, bin_path)
 
 
-def _install_file(src: Path, dst: Path, bin_path: str | None, executable: bool = False) -> Path:
+def _apply_placeholders(content: str, placeholders: dict[str, str]) -> str:
+    """Replace every key in *placeholders* with its value in *content*."""
+    for key, value in placeholders.items():
+        if key in content:
+            content = content.replace(key, value)
+    return content
+
+
+def _install_file(
+    src: Path,
+    dst: Path,
+    bin_path: str | None,
+    executable: bool = False,
+    placeholders: dict[str, str] | None = None,
+) -> Path:
     content = src.read_text(encoding="utf-8")
     if bin_path is not None:
         content = _render(content, bin_path)
+    if placeholders:
+        content = _apply_placeholders(content, placeholders)
     dst.parent.mkdir(parents=True, exist_ok=True)
     dst.write_text(content, encoding="utf-8")
     if executable:
@@ -85,6 +148,8 @@ def install_harness(
             "install it on PATH, or place it at ~/.local/bin/codebase-memory-mcp."
         )
 
+    hierarchy = load_hierarchy()
+    supervisor_display = resolve_supervisor_display(hierarchy)
     deployed: dict[str, list[str]] = {"agents": [], "hooks": [], "mcp": [], "symlinks": []}
 
     # Agents -> openrouter config home (they need the launcher proxy env).
@@ -92,16 +157,38 @@ def install_harness(
     agents_dst = openrouter_home / "agents"
     agents_dst.mkdir(parents=True, exist_ok=True)
     for src in sorted(agents_src.glob("*.md")):
-        dst = _install_file(src, agents_dst / src.name, bin_path=None)
+        name = src.stem
+        if name not in hierarchy["agents"]:
+            raise SystemExit(
+                f"agent template '{src.name}' has no entry in hierarchy.json"
+            )
+        model = resolve_agent_model(hierarchy, name)
+        self_display = hierarchy["agents"][name]["display"]
+        dst = _install_file(
+            src, agents_dst / src.name, bin_path=None,
+            placeholders={
+                "__MODEL__": model,
+                "__SELF_DISPLAY__": self_display,
+                "__SUPERVISOR_DISPLAY__": supervisor_display,
+            },
+        )
         deployed["agents"].append(str(dst))
 
-    # Hooks -> ~/.claude/hooks (shared). Templates are rendered with the bin path.
+    # Hooks -> ~/.claude/hooks (shared). Templates are rendered with the bin path,
+    # roster, and supervisor display.
     hooks_src = HARNESS_DIR / "hooks"
     hooks_dst = claude_home / "hooks"
     hooks_dst.mkdir(parents=True, exist_ok=True)
+    roster = render_roster(hierarchy)
     for src in sorted(hooks_src.iterdir()):
         name = src.name.removesuffix(".template") if src.name.endswith(".template") else src.name
-        dst = _install_file(src, hooks_dst / name, bin_path=bin_path, executable=True)
+        dst = _install_file(
+            src, hooks_dst / name, bin_path=bin_path, executable=True,
+            placeholders={
+                "__ROSTER__": roster,
+                "__SUPERVISOR_DISPLAY__": supervisor_display,
+            },
+        )
         deployed["hooks"].append(str(dst))
 
     # Ensure openrouter hooks dir mirrors ~/.claude/hooks (symlink if absent).

@@ -1,0 +1,29 @@
+{
+  "provider": "openrouter",
+  "model_prefix": "claude-openrouter-",
+  "supervisor": {
+    "tier": "supervisor",
+    "default_slug": "z-ai/glm-5.2",
+    "display": "GLM 5.2"
+  },
+  "agents": {
+    "ctx-pro": {
+      "tier": "coder",
+      "default_slug": "deepseek/deepseek-v4-pro",
+      "display": "DeepSeek V4 Pro",
+      "role": "verbose MCP/graph synthesis (read-only)"
+    },
+    "code-pro": {
+      "tier": "coder",
+      "default_slug": "deepseek/deepseek-v4-pro",
+      "display": "DeepSeek V4 Pro",
+      "role": "implementation / refactor / tests"
+    },
+    "code-flash": {
+      "tier": "small",
+      "default_slug": "deepseek/deepseek-v4-flash",
+      "display": "DeepSeek V4 Flash",
+      "role": "trivial mechanical edits"
+    }
+  }
+}

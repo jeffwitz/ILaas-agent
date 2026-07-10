@@ -1,8 +1,8 @@
 ---
 name: code-flash
-description: Agent rapide pour les tâches simples et mécaniques — recherche de code, corrections triviales, lecture de fichiers, questions simples. Utilise DeepSeek V4 Flash pour vitesse et coût minimal.
+description: Agent rapide pour les tâches simples et mécaniques — recherche de code, corrections triviales, lecture de fichiers, questions simples. Utilise __SELF_DISPLAY__ pour vitesse et coût minimal.
 tools: Read, Grep, Glob, Bash, Edit, Write
-model: claude-openrouter-deepseek/deepseek-v4-flash
+model: __MODEL__
 color: green
 ---
 

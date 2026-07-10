@@ -32,6 +32,7 @@ The harness artifacts — agent definitions, SessionStart/PreToolUse hooks, and 
 
 ```text
 harness/
+  hierarchy.json     # single source of truth: agent names, tiers, default_slugs, displays
   agents/
     ctx-pro.md       # DeepSeek V4 Pro, read-only MCP tools, synthesizes verbose queries
     code-pro.md      # DeepSeek V4 Pro, coding tasks
@@ -43,11 +44,27 @@ harness/
 ```
 
 Templates use the `__CODEBASE_MEMORY_BIN__` placeholder, resolved at install time.
+Agent `model:` fields use `__MODEL__`, resolved from the hierarchy + tier catalog.
+The hook uses `__SUPERVISOR_DISPLAY__` and `__ROSTER__`, both resolved from the hierarchy.
+
+### `harness/hierarchy.json` — single source of truth
+
+All agent names, tier assignments, default model slugs, and display names live in
+`harness/hierarchy.json`. Concrete model IDs are resolved at install time by
+cross-referencing the tier mapping from the provider catalog (`tiers show
+--provider openrouter`). The hierarchy defines:
+
+- **provider** and **model_prefix** — used to construct the full model ID.
+- **supervisor** — tier, default slug, and human-readable display name.
+- **agents** — one entry per subagent, each with tier, default slug, display, and role.
+
+No agent name or model is hardcoded in the agent `.md` files or hooks; they all
+render from this single source.
 
 ## What each piece does
 
 - **`ctx-pro`** — the synthesizer the user asked for: it calls the codebase-memory-mcp tools (`detect_changes`, `get_architecture`, `trace_path`, `query_graph`, `search_graph`) and returns a compact synthesis, never the raw dump. This is what keeps the GLM 5.2 supervisor context small.
-- **`cbm-session-reminder`** — injects the protocol at every session start: (1-3) use the graph first, (4) prove no conflict edge before parallel subagent dispatch, (5) delegate verbose MCP queries to `ctx-pro`, (6) the supervisor (GLM 5.2) must delegate the implementer's work — full-file reads, coding, tests — to `code-pro`/`code-flash` and never do it inline in the main loop.
+- **`cbm-session-reminder`** — injects the protocol at every session start: (1-3) use the graph first, (4) prove no conflict edge before parallel subagent dispatch, (5) delegate verbose MCP queries to the synthesizer agent, (6) the supervisor must delegate the implementer's work — full-file reads, coding, tests — to the agents in the roster and never do it inline. The roster and supervisor display name are rendered from `hierarchy.json` at install time.
 - **`cbm-code-discovery-gate`** — PreToolUse hook on `Grep|Glob` that augments text search with graph context (never blocks).
 - **`mcp.json`** — declares the `codebase-memory-mcp` server so its tools are available to the supervisor and to `ctx-pro`.
 
