@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 import argparse
+import http.client
 import json
 import os
+import socket
 import time
 import uuid
 import urllib.error
@@ -15,6 +17,10 @@ MODEL_PREFIX = "claude-ilaas-"
 DEFAULT_MODEL = "ilaas-default"
 MAX_OUTPUT_TOKENS = int(os.environ.get("ILAAS_CLAUDE_MAX_TOKENS", "4096"))
 SERVICE_NAME = "ilaas-claude-messages-proxy"
+# Connect to upstream once; then allow up to IDLE_TIMEOUT seconds between
+# SSE chunks. No total-duration cap while chunks keep flowing (B1).
+CONNECT_TIMEOUT = 10
+IDLE_TIMEOUT = int(os.environ.get("ILAAS_PROXY_IDLE_TIMEOUT", "120"))
 
 
 class UpstreamHTTPError(Exception):
@@ -231,8 +237,11 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 self.send_json(HTTPStatus.OK, {"input_tokens": estimate_tokens(payload)})
                 return
             if path == "/v1/messages":
-                chat_response = self.call_chat_completions(payload)
-                self.write_anthropic_result(payload, chat_response)
+                if payload.get("stream"):
+                    self.handle_streaming_messages(payload)
+                else:
+                    chat_response = self.call_chat_completions(payload)
+                    self.write_anthropic_result(payload, chat_response)
                 return
             self.send_json(HTTPStatus.NOT_FOUND, {"error": {"type": "not_found_error", "message": "only /v1/messages is supported"}})
         except urllib.error.HTTPError as error:
@@ -275,11 +284,11 @@ class ProxyHandler(BaseHTTPRequestHandler):
             })
         return {"data": models, "has_more": False, "first_id": models[0]["id"] if models else None, "last_id": models[-1]["id"] if models else None}
 
-    def call_chat_completions(self, payload):
+    def build_chat_payload(self, payload, stream=False):
         chat_payload = {
             "model": strip_model_prefix(payload.get("model", DEFAULT_MODEL)),
             "messages": chat_messages_from_anthropic(payload),
-            "stream": False,
+            "stream": stream,
         }
         if payload.get("max_tokens") is not None:
             chat_payload["max_tokens"] = min(int(payload["max_tokens"]), MAX_OUTPUT_TOKENS)
@@ -300,22 +309,29 @@ class ProxyHandler(BaseHTTPRequestHandler):
                     json.dump(chat_payload, fh, ensure_ascii=False, indent=2)
             except Exception:
                 pass
+        return chat_payload
+
+    def retry_payload_for_qwen(self, chat_payload):
+        retry_payload = dict(chat_payload)
+        retry_payload["messages"] = [
+            {
+                "role": "system",
+                "content": (
+                    "When calling tools, function arguments must be a complete valid JSON object. "
+                    "Do not emit unterminated strings."
+                ),
+            },
+            *chat_payload["messages"],
+        ]
+        return retry_payload
+
+    def call_chat_completions(self, payload):
+        chat_payload = self.build_chat_payload(payload, stream=False)
         try:
             return self.upstream_json("/chat/completions", chat_payload)
         except UpstreamHTTPError as error:
             if self.should_retry_qwen_tool_json_error(chat_payload, error.body):
-                retry_payload = dict(chat_payload)
-                retry_payload["messages"] = [
-                    {
-                        "role": "system",
-                        "content": (
-                            "When calling tools, function arguments must be a complete valid JSON object. "
-                            "Do not emit unterminated strings."
-                        ),
-                    },
-                    *chat_payload["messages"],
-                ]
-                return self.upstream_json("/chat/completions", retry_payload)
+                return self.upstream_json("/chat/completions", self.retry_payload_for_qwen(chat_payload))
             raise
 
     def should_retry_qwen_tool_json_error(self, chat_payload, body):
@@ -351,29 +367,190 @@ class ProxyHandler(BaseHTTPRequestHandler):
         stop_reason = "tool_use" if message.get("tool_calls") else ("max_tokens" if finish_reason == "length" else "end_turn")
         usage = anthropic_usage(chat_response.get("usage"))
         result = anthropic_message(response_id, model, content, stop_reason, usage)
-        if not request_payload.get("stream"):
-            self.send_json(HTTPStatus.OK, result)
-            return
+        self.send_json(HTTPStatus.OK, result)
+
+    def upstream_stream(self, path, chat_payload):
+        """Open a streaming POST to upstream; return (conn, response) on HTTP 200.
+
+        Raises UpstreamHTTPError on a non-200 status or a connect/read failure.
+        The socket is switched to IDLE_TIMEOUT for chunk reads after connect.
+        """
+        body = json.dumps(chat_payload, ensure_ascii=False).encode("utf-8")
+        parsed = urllib.parse.urlparse(self.upstream_base + path)
+        conn = http.client.HTTPConnection(parsed.hostname, parsed.port or 80, timeout=CONNECT_TIMEOUT)
+        headers = {"content-type": "application/json", "authorization": self.headers.get("authorization", "Bearer sk-local-dummy")}
+        try:
+            conn.request("POST", parsed.path or "/", body=body, headers=headers)
+            response = conn.getresponse()
+            if response.status != 200:
+                error_body = response.read().decode("utf-8", errors="replace")
+                conn.close()
+                raise UpstreamHTTPError(response.status, error_body)
+            if conn.sock is not None:
+                conn.sock.settimeout(IDLE_TIMEOUT)
+            return conn, response
+        except UpstreamHTTPError:
+            raise
+        except (http.client.HTTPException, OSError) as error:
+            try:
+                conn.close()
+            except Exception:
+                pass
+            raise UpstreamHTTPError(502, f"upstream stream connect/read failure: {error}") from error
+
+    def handle_streaming_messages(self, request_payload):
+        chat_payload = self.build_chat_payload(request_payload, stream=True)
+        try:
+            conn, response = self.upstream_stream("/chat/completions", chat_payload)
+        except UpstreamHTTPError as error:
+            if self.should_retry_qwen_tool_json_error(chat_payload, error.body):
+                try:
+                    conn, response = self.upstream_stream("/chat/completions", self.retry_payload_for_qwen(chat_payload))
+                except UpstreamHTTPError as err2:
+                    print(f"upstream HTTP {err2.code}: {err2.body[:2000]}", flush=True)
+                    self.send_json(err2.code, {"error": {"type": "api_error", "message": err2.body}})
+                    return
+            else:
+                print(f"upstream HTTP {error.code}: {error.body[:2000]}", flush=True)
+                self.send_json(error.code, {"error": {"type": "api_error", "message": error.body}})
+                return
+        self.write_anthropic_stream(request_payload, conn, response)
+
+    def begin_sse(self):
         self.send_response(HTTPStatus.OK)
         self.send_header("content-type", "text/event-stream; charset=utf-8")
         self.send_header("cache-control", "no-cache")
         self.send_header("transfer-encoding", "chunked")
         self.end_headers()
-        self.write_chunk(sse({"type": "message_start", "message": dict(result, content=[], stop_reason=None, stop_sequence=None)}))
-        for index, block in enumerate(content):
-            if block["type"] == "text":
-                self.write_chunk(sse({"type": "content_block_start", "index": index, "content_block": {"type": "text", "text": ""}}))
-                if block.get("text"):
-                    self.write_chunk(sse({"type": "content_block_delta", "index": index, "delta": {"type": "text_delta", "text": block["text"]}}))
-                self.write_chunk(sse({"type": "content_block_stop", "index": index}))
-            elif block["type"] == "tool_use":
-                self.write_chunk(sse({"type": "content_block_start", "index": index, "content_block": {"type": "tool_use", "id": block["id"], "name": block["name"], "input": {}}}))
-                self.write_chunk(sse({"type": "content_block_delta", "index": index, "delta": {"type": "input_json_delta", "partial_json": json.dumps(block.get("input", {}), ensure_ascii=False)}}))
-                self.write_chunk(sse({"type": "content_block_stop", "index": index}))
-        self.write_chunk(sse({"type": "message_delta", "delta": {"stop_reason": stop_reason, "stop_sequence": None}, "usage": {"output_tokens": usage.get("output_tokens", 0)}}))
-        self.write_chunk(sse({"type": "message_stop"}))
+
+    def end_sse(self):
         self.wfile.write(b"0\r\n\r\n")
         self.wfile.flush()
+
+    def write_anthropic_stream(self, request_payload, conn, response):
+        """Translate an upstream Chat Completions SSE stream to Anthropic
+        events incrementally: text deltas live, tool-call argument fragments
+        forwarded as input_json_delta as they arrive (true streaming)."""
+        response_id = "msg_" + uuid.uuid4().hex
+        model = request_payload.get("model", prefixed_model(DEFAULT_MODEL))
+        input_tokens = estimate_tokens(request_payload)
+        self.begin_sse()
+        self.write_chunk(sse({"type": "message_start", "message": {
+            "id": response_id, "type": "message", "role": "assistant", "model": model,
+            "content": [], "stop_reason": None, "stop_sequence": None,
+            "usage": {"input_tokens": input_tokens, "output_tokens": 0},
+        }}))
+
+        next_index = 0
+        text_index = None
+        tool_blocks = {}  # upstream tool index -> dict(block, id, name, started, pending_args)
+        finish_reason = None
+        usage_out = 0
+
+        def close_text():
+            nonlocal text_index
+            if text_index is not None:
+                self.write_chunk(sse({"type": "content_block_stop", "index": text_index}))
+                text_index = None
+
+        def emit_stream_error(message):
+            self.write_chunk(sse({"type": "error", "error": {"type": "api_error", "message": message}}))
+            self.write_chunk(sse({"type": "message_stop"}))
+            self.end_sse()
+
+        try:
+            while True:
+                raw = response.readline()
+                if not raw:
+                    break
+                line = raw.decode("utf-8", errors="replace").strip()
+                if not line or not line.startswith("data:"):
+                    continue
+                data = line[5:].strip()
+                if data == "[DONE]":
+                    break
+                try:
+                    chunk = json.loads(data)
+                except json.JSONDecodeError:
+                    continue
+                choice = (chunk.get("choices") or [{}])[0]
+                delta = choice.get("delta") or {}
+                content = delta.get("content")
+                if isinstance(content, str) and content:
+                    if text_index is None:
+                        text_index = next_index
+                        next_index += 1
+                        self.write_chunk(sse({"type": "content_block_start", "index": text_index, "content_block": {"type": "text", "text": ""}}))
+                    self.write_chunk(sse({"type": "content_block_delta", "index": text_index, "delta": {"type": "text_delta", "text": content}}))
+                for tc in delta.get("tool_calls") or []:
+                    if not isinstance(tc, dict):
+                        continue
+                    ti = tc.get("index", 0)
+                    if ti not in tool_blocks:
+                        close_text()
+                        tool_blocks[ti] = {"block": next_index, "id": None, "name": None, "started": False, "pending_args": ""}
+                        next_index += 1
+                    entry = tool_blocks[ti]
+                    fn = tc.get("function") or {}
+                    if entry["id"] is None and tc.get("id"):
+                        entry["id"] = tc["id"]
+                    if not entry["name"] and fn.get("name"):
+                        entry["name"] = fn["name"]
+                    args_frag = fn.get("arguments")
+                    if not entry["started"] and entry["name"]:
+                        entry["started"] = True
+                        self.write_chunk(sse({"type": "content_block_start", "index": entry["block"], "content_block": {
+                            "type": "tool_use",
+                            "id": entry["id"] or ("toolu_" + uuid.uuid4().hex),
+                            "name": entry["name"], "input": {},
+                        }}))
+                        if entry["pending_args"]:
+                            self.write_chunk(sse({"type": "content_block_delta", "index": entry["block"], "delta": {"type": "input_json_delta", "partial_json": entry["pending_args"]}}))
+                            entry["pending_args"] = ""
+                    if args_frag:
+                        if entry["started"]:
+                            self.write_chunk(sse({"type": "content_block_delta", "index": entry["block"], "delta": {"type": "input_json_delta", "partial_json": args_frag}}))
+                        else:
+                            entry["pending_args"] += args_frag
+                if choice.get("finish_reason"):
+                    finish_reason = choice["finish_reason"]
+                usage = chunk.get("usage")
+                if isinstance(usage, dict):
+                    if usage.get("completion_tokens") is not None:
+                        usage_out = int(usage["completion_tokens"])
+                    if usage.get("prompt_tokens") is not None:
+                        input_tokens = int(usage["prompt_tokens"])
+        except (socket.timeout, OSError) as error:
+            emit_stream_error(f"upstream stream idle timeout: {error}")
+            try:
+                conn.close()
+            except Exception:
+                pass
+            return
+        except Exception as error:
+            print(f"stream translation error: {error}", flush=True)
+            emit_stream_error(f"stream translation error: {error}")
+            try:
+                conn.close()
+            except Exception:
+                pass
+            return
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+        close_text()
+        any_tool = False
+        for entry in tool_blocks.values():
+            if entry["started"]:
+                any_tool = True
+                self.write_chunk(sse({"type": "content_block_stop", "index": entry["block"]}))
+        stop_reason = "tool_use" if any_tool else ("max_tokens" if finish_reason == "length" else "end_turn")
+        self.write_chunk(sse({"type": "message_delta", "delta": {"stop_reason": stop_reason, "stop_sequence": None}, "usage": {"output_tokens": usage_out}}))
+        self.write_chunk(sse({"type": "message_stop"}))
+        self.end_sse()
 
     def write_chunk(self, chunk):
         self.wfile.write(f"{len(chunk):X}\r\n".encode("ascii"))
