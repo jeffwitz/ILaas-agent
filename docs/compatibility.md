@@ -21,9 +21,8 @@ The Codex and Claude Code proxies are intentionally minimal:
 - Codex `/v1/responses` is translated to LiteLLM `/v1/chat/completions`.
 - Claude `/v1/messages` is translated to LiteLLM `/v1/chat/completions`.
 - Common text output and basic tool-call flows are supported.
-- The Codex proxy calls upstream with `stream: false` and emits a Responses-shaped result to Codex.
 - The proxies are not complete OpenAI Responses or Anthropic Messages implementations.
-- The Claude Messages proxy streams token-by-token when the client requests `stream: true` (text deltas and tool-call argument fragments are forwarded live); the Codex Responses proxy still buffers a single completion. An inter-chunk idle timeout (`ILAAS_PROXY_IDLE_TIMEOUT`, default 120 s) guards the streamed path; there is no total-duration cap while chunks flow.
+- Both the Claude Messages and Codex Responses proxies stream token-by-token when the client requests `stream: true` (text deltas and tool-call argument fragments are forwarded live); the buffered single-completion path is kept for `stream: false`. An inter-chunk idle timeout (`ILAAS_PROXY_IDLE_TIMEOUT`, default 120 s) guards the streamed path; there is no total-duration cap while chunks flow.
 
 This is enough for the tested agent workflows, but it should be treated as a compatibility layer rather than a drop-in API server.
 

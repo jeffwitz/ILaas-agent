@@ -1,15 +1,23 @@
 #!/usr/bin/env python3
 import argparse
+import http.client
 import json
+import os
+import socket
 import time
 import uuid
 import urllib.error
+import urllib.parse
 import urllib.request
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
 SERVICE_NAME = "ilaas-codex-responses-proxy"
+# Connect to upstream once; then allow up to IDLE_TIMEOUT seconds between
+# SSE chunks. No total-duration cap while chunks keep flowing (B1).
+CONNECT_TIMEOUT = 10
+IDLE_TIMEOUT = int(os.environ.get("ILAAS_PROXY_IDLE_TIMEOUT", "120"))
 
 
 class UpstreamHTTPError(Exception):
@@ -187,8 +195,11 @@ class ProxyHandler(BaseHTTPRequestHandler):
         try:
             content_length = int(self.headers.get("content-length", "0"))
             payload = json.loads(self.rfile.read(content_length).decode("utf-8"))
-            chat_response = self.call_chat_completions(payload)
-            self.write_responses_result(payload, chat_response)
+            if payload.get("stream"):
+                self.handle_streaming_responses(payload)
+            else:
+                chat_response = self.call_chat_completions(payload)
+                self.write_responses_result(payload, chat_response)
         except urllib.error.HTTPError as error:
             body = error.read().decode("utf-8", errors="replace")
             self.send_json(error.code, {"error": body})
@@ -197,28 +208,42 @@ class ProxyHandler(BaseHTTPRequestHandler):
         except Exception as error:
             self.send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(error)})
 
-    def call_chat_completions(self, payload):
+    def build_chat_payload(self, payload, stream=False):
         chat_payload = {
             "model": payload.get("model", "ilaas-default"),
             "messages": chat_messages_from_responses(payload),
-            "stream": False,
+            "stream": stream,
         }
-
         if payload.get("max_output_tokens") is not None:
             chat_payload["max_tokens"] = payload["max_output_tokens"]
         elif payload.get("max_completion_tokens") is not None:
             chat_payload["max_tokens"] = payload["max_completion_tokens"]
-
         if payload.get("temperature") is not None:
             chat_payload["temperature"] = payload["temperature"]
         if payload.get("top_p") is not None:
             chat_payload["top_p"] = payload["top_p"]
-
         tools = chat_tools_from_responses(payload)
         if tools:
             chat_payload["tools"] = tools
             chat_payload["tool_choice"] = "auto"
+        return chat_payload
 
+    def retry_payload_for_qwen(self, chat_payload):
+        retry_payload = dict(chat_payload)
+        retry_payload["messages"] = [
+            {
+                "role": "system",
+                "content": (
+                    "When calling tools, function arguments must be a complete valid JSON object. "
+                    "Do not emit unterminated strings."
+                ),
+            },
+            *chat_payload["messages"],
+        ]
+        return retry_payload
+
+    def call_chat_completions(self, payload):
+        chat_payload = self.build_chat_payload(payload, stream=False)
         headers = {
             "content-type": "application/json",
             "authorization": self.headers.get("authorization", "Bearer sk-local-dummy"),
@@ -227,18 +252,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
             return self.post_chat_completion(chat_payload, headers)
         except UpstreamHTTPError as error:
             if self.should_retry_qwen_tool_json_error(chat_payload, error.body):
-                retry_payload = dict(chat_payload)
-                retry_payload["messages"] = [
-                    {
-                        "role": "system",
-                        "content": (
-                            "When calling tools, function arguments must be a complete valid JSON object. "
-                            "Do not emit unterminated strings."
-                        ),
-                    },
-                    *chat_payload["messages"],
-                ]
-                return self.post_chat_completion(retry_payload, headers)
+                return self.post_chat_completion(self.retry_payload_for_qwen(chat_payload), headers)
             raise
 
     def post_chat_completion(self, chat_payload, headers):
@@ -269,12 +283,69 @@ class ProxyHandler(BaseHTTPRequestHandler):
         self.wfile.write(b"\r\n")
         self.wfile.flush()
 
+    def upstream_stream(self, path, chat_payload):
+        """Open a streaming POST to upstream; return (conn, response) on 200.
+
+        Raises UpstreamHTTPError on a non-200 status or a connect/read failure.
+        The socket is switched to IDLE_TIMEOUT for chunk reads after connect.
+        """
+        body = json.dumps(chat_payload, ensure_ascii=False).encode("utf-8")
+        parsed = urllib.parse.urlparse(self.upstream_base + path)
+        conn = http.client.HTTPConnection(parsed.hostname, parsed.port or 80, timeout=CONNECT_TIMEOUT)
+        headers = {"content-type": "application/json", "authorization": self.headers.get("authorization", "Bearer sk-local-dummy")}
+        try:
+            conn.request("POST", parsed.path or "/", body=body, headers=headers)
+            response = conn.getresponse()
+            if response.status != 200:
+                error_body = response.read().decode("utf-8", errors="replace")
+                conn.close()
+                raise UpstreamHTTPError(response.status, error_body)
+            if conn.sock is not None:
+                conn.sock.settimeout(IDLE_TIMEOUT)
+            return conn, response
+        except UpstreamHTTPError:
+            raise
+        except (http.client.HTTPException, OSError) as error:
+            try:
+                conn.close()
+            except Exception:
+                pass
+            raise UpstreamHTTPError(502, f"upstream stream connect/read failure: {error}") from error
+
+    def handle_streaming_responses(self, request_payload):
+        chat_payload = self.build_chat_payload(request_payload, stream=True)
+        try:
+            conn, response = self.upstream_stream("/chat/completions", chat_payload)
+        except UpstreamHTTPError as error:
+            if self.should_retry_qwen_tool_json_error(chat_payload, error.body):
+                try:
+                    conn, response = self.upstream_stream("/chat/completions", self.retry_payload_for_qwen(chat_payload))
+                except UpstreamHTTPError as err2:
+                    print(f"upstream HTTP {err2.code}: {err2.body[:2000]}", flush=True)
+                    self.send_json(err2.code, {"error": err2.body})
+                    return
+            else:
+                print(f"upstream HTTP {error.code}: {error.body[:2000]}", flush=True)
+                self.send_json(error.code, {"error": error.body})
+                return
+        self.write_responses_stream(request_payload, conn, response)
+
+    def begin_sse(self):
+        self.send_response(HTTPStatus.OK)
+        self.send_header("content-type", "text/event-stream; charset=utf-8")
+        self.send_header("cache-control", "no-cache")
+        self.send_header("x-accel-buffering", "no")
+        self.send_header("transfer-encoding", "chunked")
+        self.end_headers()
+
+    def end_sse(self):
+        self.wfile.write(b"0\r\n\r\n")
+        self.wfile.flush()
+
     def write_responses_result(self, request_payload, chat_response):
-        stream = bool(request_payload.get("stream", False))
         response_id = "resp_" + uuid.uuid4().hex
         message_id = "msg_" + uuid.uuid4().hex
         model = request_payload.get("model", chat_response.get("model", "ilaas-default"))
-
         choice = (chat_response.get("choices") or [{}])[0]
         message = choice.get("message") or {}
         text = message.get("content") or ""
@@ -290,106 +361,151 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 "content": [{"type": "output_text", "text": text, "annotations": []}],
             })
         output.extend(function_call_output_from_chat(tool_call) for tool_call in tool_calls)
+        self.send_json(HTTPStatus.OK, response_object(response_id, model, "completed", output, usage))
 
-        if not stream:
-            self.send_json(HTTPStatus.OK, response_object(response_id, model, "completed", output, usage))
-            return
-
-        self.send_response(HTTPStatus.OK)
-        self.send_header("content-type", "text/event-stream; charset=utf-8")
-        self.send_header("cache-control", "no-cache")
-        self.send_header("x-accel-buffering", "no")
-        self.send_header("transfer-encoding", "chunked")
-        self.end_headers()
-
+    def write_responses_stream(self, request_payload, conn, response):
+        """Translate an upstream Chat Completions SSE stream to Responses-API
+        events incrementally: text deltas as response.output_text.delta and
+        tool-call argument fragments as response.function_call_arguments.delta
+        as they arrive (true streaming)."""
+        response_id = "resp_" + uuid.uuid4().hex
+        model = request_payload.get("model", "ilaas-default")
         in_progress = response_object(response_id, model, "in_progress", [])
+        self.begin_sse()
         self.write_chunked(sse_line({"type": "response.created", "response": in_progress}))
         self.write_chunked(sse_line({"type": "response.in_progress", "response": in_progress}))
-        for index, item in enumerate(output):
-            if item["type"] == "message":
-                self.write_message_item(index, item)
-            elif item["type"] == "function_call":
-                self.write_function_call_item(index, item)
-        self.write_chunked(sse_line({
-            "type": "response.completed",
-            "response": response_object(response_id, model, "completed", output, usage),
-        }))
+
+        output = []
+        next_index = 0
+        text_state = None  # {"index","id","text","started","closed"}
+        tool_states = {}  # upstream tool index -> dict
+        finish_reason = None
+        usage_raw = None
+
+        def ensure_text_started():
+            nonlocal text_state, next_index
+            if text_state is None:
+                text_state = {"index": next_index, "id": "msg_" + uuid.uuid4().hex, "text": "", "started": False, "closed": False}
+                next_index += 1
+            if not text_state["started"]:
+                text_state["started"] = True
+                self.write_chunked(sse_line({
+                    "type": "response.output_item.added", "output_index": text_state["index"],
+                    "item": {"id": text_state["id"], "type": "message", "role": "assistant", "status": "in_progress", "content": []},
+                }))
+                self.write_chunked(sse_line({
+                    "type": "response.content_part.added", "item_id": text_state["id"],
+                    "output_index": text_state["index"], "content_index": 0,
+                    "part": {"type": "output_text", "text": "", "annotations": []},
+                }))
+
+        def close_text():
+            nonlocal text_state
+            if text_state and text_state["started"] and not text_state["closed"]:
+                text_state["closed"] = True
+                text = text_state["text"]
+                self.write_chunked(sse_line({"type": "response.output_text.done", "item_id": text_state["id"], "output_index": text_state["index"], "content_index": 0, "text": text}))
+                self.write_chunked(sse_line({"type": "response.content_part.done", "item_id": text_state["id"], "output_index": text_state["index"], "content_index": 0, "part": {"type": "output_text", "text": text, "annotations": []}}))
+                item = {"type": "message", "id": text_state["id"], "status": "completed", "role": "assistant", "content": [{"type": "output_text", "text": text, "annotations": []}]}
+                self.write_chunked(sse_line({"type": "response.output_item.done", "output_index": text_state["index"], "sequence_number": text_state["index"] + 1, "item": item}))
+                output.append(item)
+                text_state = None
+
+        def emit_stream_error(message):
+            failed = response_object(response_id, model, "failed", [], None)
+            failed["error"] = {"message": message}
+            self.write_chunked(sse_line({"type": "response.failed", "response": failed}))
+            self.write_chunked(b"data: [DONE]\n\n")
+            self.end_sse()
+
+        try:
+            while True:
+                raw = response.readline()
+                if not raw:
+                    break
+                line = raw.decode("utf-8", errors="replace").strip()
+                if not line or not line.startswith("data:"):
+                    continue
+                data = line[5:].strip()
+                if data == "[DONE]":
+                    break
+                try:
+                    chunk = json.loads(data)
+                except json.JSONDecodeError:
+                    continue
+                choice = (chunk.get("choices") or [{}])[0]
+                delta = choice.get("delta") or {}
+                content = delta.get("content")
+                if isinstance(content, str) and content:
+                    ensure_text_started()
+                    text_state["text"] += content
+                    self.write_chunked(sse_line({"type": "response.output_text.delta", "item_id": text_state["id"], "output_index": text_state["index"], "content_index": 0, "delta": content}))
+                for tc in delta.get("tool_calls") or []:
+                    if not isinstance(tc, dict):
+                        continue
+                    ti = tc.get("index", 0)
+                    if ti not in tool_states:
+                        close_text()
+                        tool_states[ti] = {"index": next_index, "id": "fc_" + uuid.uuid4().hex, "call_id": None, "name": None, "arguments": "", "emitted": 0, "started": False, "closed": False}
+                        next_index += 1
+                    st = tool_states[ti]
+                    fn = tc.get("function") or {}
+                    if st["call_id"] is None and tc.get("id"):
+                        st["call_id"] = tc["id"]
+                    if not st["name"] and fn.get("name"):
+                        st["name"] = fn["name"]
+                    args_frag = fn.get("arguments") or ""
+                    if args_frag:
+                        st["arguments"] += args_frag
+                    if not st["started"] and st["name"]:
+                        st["started"] = True
+                        self.write_chunked(sse_line({
+                            "type": "response.output_item.added", "output_index": st["index"],
+                            "item": {"type": "function_call", "id": st["id"], "call_id": st["call_id"] or ("call_" + uuid.uuid4().hex), "status": "in_progress", "name": st["name"], "arguments": ""},
+                        }))
+                    if st["started"] and len(st["arguments"]) > st["emitted"]:
+                        new = st["arguments"][st["emitted"]:]
+                        self.write_chunked(sse_line({"type": "response.function_call_arguments.delta", "item_id": st["id"], "output_index": st["index"], "delta": new}))
+                        st["emitted"] = len(st["arguments"])
+                if choice.get("finish_reason"):
+                    finish_reason = choice["finish_reason"]
+                usage = chunk.get("usage")
+                if isinstance(usage, dict):
+                    usage_raw = usage
+        except (socket.timeout, OSError) as error:
+            emit_stream_error(f"upstream stream idle timeout: {error}")
+            try:
+                conn.close()
+            except Exception:
+                pass
+            return
+        except Exception as error:
+            print(f"stream translation error: {error}", flush=True)
+            emit_stream_error(f"stream translation error: {error}")
+            try:
+                conn.close()
+            except Exception:
+                pass
+            return
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+        close_text()
+        for st in tool_states.values():
+            if st["started"] and not st["closed"]:
+                st["closed"] = True
+                self.write_chunked(sse_line({"type": "response.function_call_arguments.done", "item_id": st["id"], "output_index": st["index"], "arguments": st["arguments"]}))
+                item = {"type": "function_call", "id": st["id"], "call_id": st["call_id"] or ("call_" + uuid.uuid4().hex), "status": "completed", "name": st["name"], "arguments": st["arguments"]}
+                self.write_chunked(sse_line({"type": "response.output_item.done", "output_index": st["index"], "sequence_number": st["index"] + 1, "item": item}))
+                output.append(item)
+
+        usage = responses_usage(usage_raw) if usage_raw else None
+        self.write_chunked(sse_line({"type": "response.completed", "response": response_object(response_id, model, "completed", output, usage)}))
         self.write_chunked(b"data: [DONE]\n\n")
-        self.wfile.write(b"0\r\n\r\n")
-        self.wfile.flush()
-
-    def write_message_item(self, index, item):
-        item_id = item["id"]
-        text = item["content"][0]["text"]
-        self.write_chunked(sse_line({
-            "type": "response.output_item.added",
-            "output_index": index,
-            "item": {"id": item_id, "type": "message", "role": "assistant", "status": "in_progress", "content": []},
-        }))
-        self.write_chunked(sse_line({
-            "type": "response.content_part.added",
-            "item_id": item_id,
-            "output_index": index,
-            "content_index": 0,
-            "part": {"type": "output_text", "text": "", "annotations": []},
-        }))
-        if text:
-            self.write_chunked(sse_line({
-                "type": "response.output_text.delta",
-                "item_id": item_id,
-                "output_index": index,
-                "content_index": 0,
-                "delta": text,
-            }))
-        self.write_chunked(sse_line({
-            "type": "response.output_text.done",
-            "item_id": item_id,
-            "output_index": index,
-            "content_index": 0,
-            "text": text,
-        }))
-        self.write_chunked(sse_line({
-            "type": "response.content_part.done",
-            "item_id": item_id,
-            "output_index": index,
-            "content_index": 0,
-            "part": {"type": "output_text", "text": text, "annotations": []},
-        }))
-        self.write_chunked(sse_line({
-            "type": "response.output_item.done",
-            "output_index": index,
-            "sequence_number": index + 1,
-            "item": item,
-        }))
-
-    def write_function_call_item(self, index, item):
-        added_item = dict(item)
-        added_item["arguments"] = ""
-        self.write_chunked(sse_line({
-            "type": "response.output_item.added",
-            "output_index": index,
-            "item": added_item,
-        }))
-        arguments = item.get("arguments", "")
-        if arguments:
-            self.write_chunked(sse_line({
-                "type": "response.function_call_arguments.delta",
-                "item_id": item["id"],
-                "output_index": index,
-                "delta": arguments,
-            }))
-        self.write_chunked(sse_line({
-            "type": "response.function_call_arguments.done",
-            "item_id": item["id"],
-            "output_index": index,
-            "arguments": arguments,
-        }))
-        self.write_chunked(sse_line({
-            "type": "response.output_item.done",
-            "output_index": index,
-            "sequence_number": index + 1,
-            "item": item,
-        }))
+        self.end_sse()
 
     def log_message(self, fmt, *args):
         print("%s - %s" % (self.address_string(), fmt % args), flush=True)

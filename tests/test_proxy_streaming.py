@@ -5,6 +5,7 @@ import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from proxies import claude_ilaas_messages_proxy as claude_proxy
+from proxies import codex_ilaas_responses_proxy as codex_proxy
 
 
 def sse_line(payload):
@@ -215,3 +216,159 @@ class StreamingEndToEndTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def parse_responses_events(events):
+    """Decode the list of chunk bytes written by the Codex proxy."""
+    out = []
+    for chunk in events:
+        for block in chunk.decode("utf-8").split("\n\n"):
+            block = block.strip()
+            if not block:
+                continue
+            if block == "data: [DONE]":
+                out.append(("done", None))
+            elif block.startswith("data: "):
+                payload = json.loads(block[6:])
+                out.append((payload.get("type"), payload))
+    return out
+
+
+class CodexCapturingHandler(codex_proxy.ProxyHandler):
+    def __init__(self):
+        self.events = []
+
+    def begin_sse(self):
+        pass
+
+    def end_sse(self):
+        pass
+
+    def write_chunked(self, chunk):
+        self.events.append(chunk)
+
+
+class CodexStreamingTranslatorTest(unittest.TestCase):
+    def _run(self, lines, request_payload=None):
+        handler = CodexCapturingHandler()
+        handler.write_responses_stream(
+            request_payload or {"model": "test", "input": [], "stream": True},
+            _NoConn(),
+            FakeResponse(lines),
+        )
+        return parse_responses_events(handler.events)
+
+    def test_text_deltas_streamed(self):
+        lines = [
+            sse_line({"choices": [{"delta": {"content": "Hi"}}]}),
+            sse_line({"choices": [{"delta": {"content": " there"}}]}),
+            sse_line({"choices": [{"delta": {}, "finish_reason": "stop"}]}),
+            sse_line("[DONE]"),
+        ]
+        events = self._run(lines)
+        types = [t for t, _ in events]
+        self.assertEqual(types[0], "response.created")
+        self.assertIn("response.output_text.delta", types)
+        deltas = [p["delta"] for t, p in events if t == "response.output_text.delta"]
+        self.assertEqual(deltas, ["Hi", " there"])
+        completed = [p for t, p in events if t == "response.completed"][0]
+        message = completed["response"]["output"][0]
+        self.assertEqual(message["content"][0]["text"], "Hi there")
+        self.assertEqual(types[-1], "done")
+
+    def test_tool_call_arguments_split_across_chunks(self):
+        lines = [
+            sse_line({"choices": [{"delta": {"tool_calls": [
+                {"index": 0, "id": "call_1", "type": "function",
+                 "function": {"name": "read_file", "arguments": ""}}]}}]}),
+            sse_line({"choices": [{"delta": {"tool_calls": [
+                {"index": 0, "function": {"arguments": "{\"path\":"}}]}}]}),
+            sse_line({"choices": [{"delta": {"tool_calls": [
+                {"index": 0, "function": {"arguments": "\"README.md\"}"}}]}}]}),
+            sse_line({"choices": [{"delta": {}, "finish_reason": "tool_calls"}]}),
+            sse_line("[DONE]"),
+        ]
+        events = self._run(lines)
+        types = [t for t, _ in events]
+        added = [p for t, p in events if t == "response.output_item.added"][0]
+        self.assertEqual(added["item"]["type"], "function_call")
+        self.assertEqual(added["item"]["name"], "read_file")
+        deltas = [p["delta"] for t, p in events if t == "response.function_call_arguments.delta"]
+        self.assertEqual(json.loads("".join(deltas)), {"path": "README.md"})
+        done = [p for t, p in events if t == "response.function_call_arguments.done"][0]
+        self.assertEqual(json.loads(done["arguments"]), {"path": "README.md"})
+        completed = [p for t, p in events if t == "response.completed"][0]
+        fc = completed["response"]["output"][0]
+        self.assertEqual(fc["type"], "function_call")
+        self.assertEqual(fc["name"], "read_file")
+
+    def test_premature_eof_completes_gracefully(self):
+        lines = [sse_line({"choices": [{"delta": {"content": "Hi"}}]})]
+        events = self._run(lines)
+        types = [t for t, _ in events]
+        self.assertIn("response.completed", types)
+        self.assertNotIn("response.failed", types)
+        self.assertEqual(types[-1], "done")
+
+    def test_mid_stream_oserror_emits_response_failed(self):
+        class RaisingResponse:
+            def readline(self):
+                raise ConnectionResetError("upstream reset")
+
+        handler = CodexCapturingHandler()
+        handler.write_responses_stream({"model": "test", "input": [], "stream": True}, _NoConn(), RaisingResponse())
+        events = parse_responses_events(handler.events)
+        types = [t for t, _ in events]
+        self.assertIn("response.failed", types)
+        self.assertEqual(types[-1], "done")
+
+    def test_idle_timeout_emits_response_failed(self):
+        class IdleResponse:
+            def readline(self):
+                raise socket.timeout("idle")
+
+        handler = CodexCapturingHandler()
+        handler.write_responses_stream({"model": "test", "input": [], "stream": True}, _NoConn(), IdleResponse())
+        events = parse_responses_events(handler.events)
+        failed = [p for t, p in events if t == "response.failed"][0]
+        self.assertIn("idle timeout", failed["response"]["error"]["message"])
+
+
+class CodexStreamingEndToEndTest(unittest.TestCase):
+    def _start(self, handler_class):
+        server = ThreadingHTTPServer(("127.0.0.1", 0), handler_class)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        return server
+
+    def _stop(self, server):
+        server.shutdown()
+        server.server_close()
+
+    def test_end_to_end_text_streaming(self):
+        import http.client
+
+        _FakeUpstreamHandler.script = [
+            sse_line({"choices": [{"delta": {"content": "Hi "}}]}),
+            sse_line({"choices": [{"delta": {"content": "there"}}]}),
+            sse_line({"choices": [{"delta": {}, "finish_reason": "stop"}]}),
+            sse_line("[DONE]"),
+        ]
+        upstream = self._start(_FakeUpstreamHandler)
+        try:
+            codex_proxy.ProxyHandler.upstream_base = f"http://127.0.0.1:{upstream.server_address[1]}/v1"
+            proxy = self._start(codex_proxy.ProxyHandler)
+            try:
+                conn = http.client.HTTPConnection("127.0.0.1", proxy.server_address[1], timeout=10)
+                body = json.dumps({"model": "test", "input": [], "stream": True}).encode("utf-8")
+                conn.request("POST", "/v1/responses", body=body, headers={"content-type": "application/json"})
+                response = conn.getresponse()
+                raw = response.read().decode("utf-8")
+                conn.close()
+            finally:
+                self._stop(proxy)
+        finally:
+            self._stop(upstream)
+        self.assertIn("response.created", raw)
+        self.assertIn("response.output_text.delta", raw)
+        self.assertIn("response.completed", raw)
+        self.assertIn("data: [DONE]", raw)
