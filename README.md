@@ -364,7 +364,7 @@ Maintainer notes are in [CODEX.md](CODEX.md). The implementation roadmap is in [
 
 The online documentation is configured for Read the Docs with `.readthedocs.yaml`, `docs/conf.py`, and the Read the Docs Sphinx theme. To publish it, import this GitHub repository in Read the Docs; the build uses `docs/requirements.txt`.
 
-The package also exposes a Python console script for development and future package-first installs:
+The package also exposes a Python console script as a development convenience. **The supported install path is repo-first** (`git clone` + `python3 install.py`): the wheel does not ship the `harness/` assets or wrapper templates, so a package-first install is incomplete. Use `pip install .` only to drive the `ilaas-agent` CLI from a checkout:
 
 ```bash
 python3 -m pip install .
