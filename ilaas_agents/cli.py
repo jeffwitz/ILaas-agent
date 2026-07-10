@@ -74,10 +74,18 @@ def main() -> None:
 
     smoke.add_parser(sub)
 
+    tiers_parent = argparse.ArgumentParser(add_help=False)
+    tiers_parent.add_argument("--provider", choices=["ilaas", "glm52", "openrouter"], required=True)
     tiers_parser = sub.add_parser("tiers", help="Manage tier-to-model mappings per provider.")
-    tiers_parser.add_argument("action", choices=["list", "suggest", "apply", "show"])
-    tiers_parser.add_argument("--provider", choices=["ilaas", "glm52", "openrouter"], required=True)
-    tiers_parser.add_argument("--tier", action="append", metavar="tier=slug")
+    tiers_sub = tiers_parser.add_subparsers(dest="tiers_action", required=True)
+    tiers_sub.add_parser("list", parents=[tiers_parent], help="Show the currently resolved tier mapping.")
+    tiers_sub.add_parser("show", parents=[tiers_parent], help="Show resolved tiers with the source of each.")
+    tiers_sub.add_parser("suggest", parents=[tiers_parent], help="Suggest a tier mapping from the catalog.")
+    tiers_apply = tiers_sub.add_parser("apply", parents=[tiers_parent], help="Write the tier field onto every catalog entry.")
+    tiers_apply.add_argument("--tier", action="append", metavar="tier=slug")
+    tiers_set = tiers_sub.add_parser("set", parents=[tiers_parent], help="Pin a specific slug to a tier.")
+    tiers_set.add_argument("set_tier", metavar="tier", help="tier to pin (supervisor/coder/small).")
+    tiers_set.add_argument("set_slug", metavar="slug", help="slug to pin to the tier.")
 
     harness_parser = sub.add_parser("harness", help="Install/inspect the GLM-supervisor + DeepSeek-coder harness (agents, hooks, MCP).")
     harness_sub = harness_parser.add_subparsers(dest="harness_action", required=True)
@@ -104,24 +112,31 @@ def main() -> None:
     elif args.command == "smoke":
         raise SystemExit(smoke.run(args))
     elif args.command == "tiers":
-        if args.action == "list":
+        if args.tiers_action == "list":
             for tier in tiers.TIERS:
                 resolved = tiers.resolve(args.provider, tier)
                 print(f"{args.provider} {tier}: {resolved or '(unset)'}")
             print(f"catalog: {tiers.catalog_path(args.provider)}")
             raise SystemExit(0)
-        if args.action == "show":
+        if args.tiers_action == "set":
+            if args.set_tier not in tiers.TIERS:
+                raise SystemExit(f"Unknown tier '{args.set_tier}'; expected one of: {', '.join(tiers.TIERS)}")
+            mapping = {args.set_tier: args.set_slug}
+            counts = tiers.apply(args.provider, mapping)
+            print(f"Pinned {args.provider} {args.set_tier} -> {args.set_slug}; applied tiers: {counts}")
+            raise SystemExit(0)
+        if args.tiers_action == "show":
             for tier in tiers.TIERS:
                 slug, source = tiers.resolve_with_source(args.provider, tier)
                 print(f"{args.provider} {tier}: {slug or '(unset)'}  [source: {source}]")
             print(f"catalog: {tiers.catalog_path(args.provider)}  [source: {tiers.catalog_source(args.provider)}]")
             raise SystemExit(0)
-        if args.action == "suggest":
+        if args.tiers_action == "suggest":
             mapping = tiers.suggest(args.provider)
             for tier in tiers.TIERS:
                 print(f"{args.provider} {tier}: {mapping.get(tier, '(none)')}")
             raise SystemExit(0)
-        # action == "apply"
+        # tiers_action == "apply"
         if args.tier:
             mapping = {}
             for entry in args.tier:

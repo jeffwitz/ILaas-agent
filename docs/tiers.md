@@ -55,6 +55,10 @@ For a given `(provider, tier)`, `tiers.resolve` checks, in order:
 # Show the currently resolved tier mapping
 python3 -m ilaas_agents.cli tiers list --provider ilaas
 
+# Same, with the source of each resolution (env / catalog / unset) and
+# how the catalog itself was selected
+python3 -m ilaas_agents.cli tiers show --provider openrouter
+
 # Suggest a tier mapping from the catalog (heuristic: name for ILaaS,
 # context_length + tool support for OpenRouter, trivial for GLM 5.2)
 python3 -m ilaas_agents.cli tiers suggest --provider ilaas
@@ -67,11 +71,16 @@ python3 -m ilaas_agents.cli tiers apply --provider ilaas
 python3 -m ilaas_agents.cli tiers apply --provider openrouter \
   --tier supervisor=z-ai/glm-5.2 \
   --tier small=<light-model>
+
+# Or pin one tier at a time without editing JSON by hand
+python3 -m ilaas_agents.cli tiers set --provider openrouter coder deepseek/deepseek-v4-pro
 ```
 
 `apply` requires the catalog to exist — generate it first with `refresh-models` (ILaaS) or by running the matching launcher once (GLM 5.2 / OpenRouter write their catalog on demand).
 
 ## Heuristics
+
+These name/metadata heuristics are a **fallback**, not a source of truth — they seed a catalog that has no tier field yet. Once a tier is pinned explicitly (via `tiers set` / `tiers apply --tier` / env vars / catalog `tier` field), the heuristic is ignored for that entry.
 
 - **GLM 5.2**: single model, every tier maps to `glm-5.2`.
 - **OpenRouter**: metadata-based — `tools` support + text output required; `context_length >= 200000` → `supervisor`, `< 64000` → `small`, otherwise `coder`. No tools → `small`.
