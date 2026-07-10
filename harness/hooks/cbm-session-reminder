@@ -49,4 +49,24 @@ CRITICAL - Code Discovery Protocol:
    This keeps the supervisor (GLM 5.2) context small: cheaper caching,
    less compaction, lower token spend. The point-4 dispatch safety check
    should itself be routed through ctx-pro.
+6. SUPERVISOR MUST DELEGATE THE IMPLEMENTER'S WORK (non-negotiable):
+   You are GLM 5.2, the SUPERVISOR. Your job: hold the plan, dispatch
+   subagents, review their returned diffs, synthesize, decide, and
+   commit/push. You do NOT do the implementer's work inline in the main
+   loop. Before reading/writing/coding, ask: which subagent absorbs this?
+   - Full-file reads, broad grep, get_architecture, trace_path,
+     detect_changes, query_graph, large search_graph -> `ctx-pro`
+     (compact synthesis back; raw dump stays in its ephemeral context).
+   - Implementation, refactor, debugging, writing tests -> `code-pro`.
+   - Trivial mechanical edits, simple search, one-line targeted reads
+     -> `code-flash`.
+   Never read a large source file end-to-end in the supervisor context
+   when a subagent can return the relevant excerpt. The whole cost
+   strategy (GLM 5.2 instead of Sonnet) only holds if the supervisor
+   does little real work; doing everything inline defeats the multi-tier
+   setup and burns tokens at the supervisor rate. If you are about to
+   Read a whole file or run a verbose query yourself, STOP and dispatch.
+   Failure on record: a 15-ticket plan executed 100% inline by the
+   supervisor with ZERO Agent calls -> no economy, harness moot. Do not
+   repeat. (Companion memory: supervisor-must-delegate.)
 REMINDER
