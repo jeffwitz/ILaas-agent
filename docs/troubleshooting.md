@@ -70,3 +70,18 @@ The key is written only to the local LiteLLM config outside the repository.
 ## Llama models
 
 `llama-3.1-8b` and `llama-3.3-70b` are not recommended for code-agent tool use in the current ILaaS/LiteLLM setup.
+
+## Local security model
+
+ILaaS Agent is built for a **single-user development machine**. The local services it starts are loopback-only:
+
+- LiteLLM gateway on `127.0.0.1:4000`
+- Codex Responses proxy on `127.0.0.1:4001`
+- Claude Messages proxy on `127.0.0.1:4002`
+- OpenRouter passthrough proxy on a dynamically chosen `127.0.0.1` port
+
+They bind to `127.0.0.1` only, so they are not reachable from the network. However, they accept any loopback caller with a dummy bearer (`sk-local-dummy`), which means **any local process or local user can call them and spend ILaaS / OpenRouter tokens**. This is acceptable on a single-user machine where you trust your own processes; it is **not** appropriate on shared or multi-user hosts — do not run ILaaS Agent there.
+
+The API keys themselves are never written into the Git checkout: the ILaaS key lives only in the LiteLLM config (`~/.config/litellm/ilaas-mistral.yaml`, `chmod 600`), and the provider keys live under `~/.config/ilaas-agent/keys/` (`chmod 600`). `Ilaas-doctor` reports which key source resolved per provider without printing the key value.
+
+Optional shared-secret hardening (proxies checking the `authorization` header against `ILAAS_PROXY_SHARED_SECRET`) is tracked as a later improvement, not enabled today, to keep the proxies minimal.
