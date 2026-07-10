@@ -15,8 +15,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 MODEL_PREFIX = "claude-ilaas-"
 DEFAULT_MODEL = "ilaas-default"
-MAX_OUTPUT_TOKENS = int(os.environ.get("ILAAS_CLAUDE_MAX_TOKENS", "4096"))
+MAX_OUTPUT_TOKENS = int(os.environ.get("ILAAS_CLAUDE_MAX_TOKENS", "8192"))
 SERVICE_NAME = "ilaas-claude-messages-proxy"
+# Anthropic content blocks the Chat Completions upstream cannot represent;
+# replaced with a text marker so the model and user know they were dropped.
+UNSUPPORTED_BLOCK_TYPES = {"image", "thinking", "redacted_thinking"}
 # Connect to upstream once; then allow up to IDLE_TIMEOUT seconds between
 # SSE chunks. No total-duration cap while chunks keep flowing (B1).
 CONNECT_TIMEOUT = 10
@@ -41,6 +44,23 @@ def prefixed_model(model):
     return MODEL_PREFIX + model
 
 
+def chat_tool_choice_from_anthropic(payload):
+    """Map Anthropic tool_choice to the Chat Completions tool_choice field."""
+    choice = payload.get("tool_choice")
+    if not isinstance(choice, dict):
+        return "auto"
+    kind = choice.get("type")
+    if kind == "any":
+        return "required"
+    if kind == "tool":
+        name = choice.get("name")
+        if name:
+            return {"type": "function", "function": {"name": name}}
+    if kind == "none":
+        return "none"
+    return "auto"
+
+
 def text_from_anthropic_content(content):
     if isinstance(content, str):
         return content
@@ -49,14 +69,18 @@ def text_from_anthropic_content(content):
         for block in content:
             if not isinstance(block, dict):
                 continue
-            if block.get("type") == "text" and isinstance(block.get("text"), str):
+            block_type = block.get("type")
+            if block_type == "text" and isinstance(block.get("text"), str):
                 parts.append(block["text"])
-            elif block.get("type") == "tool_result":
+            elif block_type == "tool_result":
                 tool_content = block.get("content", "")
                 if isinstance(tool_content, str):
                     parts.append(tool_content)
                 elif isinstance(tool_content, list):
                     parts.append(text_from_anthropic_content(tool_content))
+            elif block_type in UNSUPPORTED_BLOCK_TYPES:
+                print(f"claude proxy: unsupported {block_type} block omitted", flush=True)
+                parts.append(f"[unsupported block omitted: {block_type}]")
         return "\n".join(part for part in parts if part)
     return ""
 
@@ -194,6 +218,21 @@ def anthropic_message(response_id, model, content, stop_reason, usage):
     }
 
 
+def resolve_stop(finish_reason, text, stop_sequences, has_tool_calls):
+    """Best-effort Anthropic stop_reason/stop_sequence from a Chat Completions
+    finish_reason. Stop-sequence detection is approximate: the upstream may
+    strip the matched sequence from the text, so absence does not rule it out."""
+    if has_tool_calls:
+        return "tool_use", None
+    if finish_reason == "length":
+        return "max_tokens", None
+    if finish_reason == "stop" and stop_sequences:
+        for seq in stop_sequences:
+            if seq and isinstance(text, str) and seq in text:
+                return "stop_sequence", seq
+    return "end_turn", None
+
+
 def sse(data):
     return f"event: {data['type']}\ndata: {json.dumps(data, ensure_ascii=False, separators=(',', ':'))}\n\n".encode("utf-8")
 
@@ -234,6 +273,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
             payload = json.loads(self.rfile.read(content_length).decode("utf-8") or "{}")
             path = self.request_path()
             if path == "/v1/messages/count_tokens":
+                print("claude proxy: count_tokens is a len//4 heuristic, not a real tokenizer", flush=True)
                 self.send_json(HTTPStatus.OK, {"input_tokens": estimate_tokens(payload)})
                 return
             if path == "/v1/messages":
@@ -291,7 +331,10 @@ class ProxyHandler(BaseHTTPRequestHandler):
             "stream": stream,
         }
         if payload.get("max_tokens") is not None:
-            chat_payload["max_tokens"] = min(int(payload["max_tokens"]), MAX_OUTPUT_TOKENS)
+            requested = int(payload["max_tokens"])
+            if requested > MAX_OUTPUT_TOKENS:
+                print(f"claude proxy: max_tokens {requested} clamped to {MAX_OUTPUT_TOKENS}", flush=True)
+            chat_payload["max_tokens"] = min(requested, MAX_OUTPUT_TOKENS)
         if payload.get("temperature") is not None:
             chat_payload["temperature"] = float(payload["temperature"])
         if payload.get("top_p") is not None:
@@ -301,7 +344,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
         tools = chat_tools_from_anthropic(payload)
         if tools:
             chat_payload["tools"] = tools
-            chat_payload["tool_choice"] = "auto"
+            chat_payload["tool_choice"] = chat_tool_choice_from_anthropic(payload)
         debug_payload_path = os.environ.get("ILAAS_CLAUDE_DEBUG_PAYLOAD")
         if debug_payload_path:
             try:
@@ -364,9 +407,12 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 "name": function.get("name", ""),
                 "input": tool_input,
             })
-        stop_reason = "tool_use" if message.get("tool_calls") else ("max_tokens" if finish_reason == "length" else "end_turn")
+        stop_reason, stop_sequence = resolve_stop(
+            finish_reason, text, request_payload.get("stop_sequences") or [], bool(message.get("tool_calls"))
+        )
         usage = anthropic_usage(chat_response.get("usage"))
         result = anthropic_message(response_id, model, content, stop_reason, usage)
+        result["stop_sequence"] = stop_sequence
         self.send_json(HTTPStatus.OK, result)
 
     def upstream_stream(self, path, chat_payload):
@@ -443,6 +489,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
 
         next_index = 0
         text_index = None
+        full_text = ""
         tool_blocks = {}  # upstream tool index -> dict(block, id, name, started, pending_args)
         finish_reason = None
         usage_out = 0
@@ -481,6 +528,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
                         text_index = next_index
                         next_index += 1
                         self.write_chunk(sse({"type": "content_block_start", "index": text_index, "content_block": {"type": "text", "text": ""}}))
+                    full_text += content
                     self.write_chunk(sse({"type": "content_block_delta", "index": text_index, "delta": {"type": "text_delta", "text": content}}))
                 for tc in delta.get("tool_calls") or []:
                     if not isinstance(tc, dict):
@@ -547,8 +595,10 @@ class ProxyHandler(BaseHTTPRequestHandler):
             if entry["started"]:
                 any_tool = True
                 self.write_chunk(sse({"type": "content_block_stop", "index": entry["block"]}))
-        stop_reason = "tool_use" if any_tool else ("max_tokens" if finish_reason == "length" else "end_turn")
-        self.write_chunk(sse({"type": "message_delta", "delta": {"stop_reason": stop_reason, "stop_sequence": None}, "usage": {"output_tokens": usage_out}}))
+        stop_reason, stop_sequence = resolve_stop(
+            finish_reason, full_text, request_payload.get("stop_sequences") or [], any_tool
+        )
+        self.write_chunk(sse({"type": "message_delta", "delta": {"stop_reason": stop_reason, "stop_sequence": stop_sequence}, "usage": {"output_tokens": usage_out}}))
         self.write_chunk(sse({"type": "message_stop"}))
         self.end_sse()
 
